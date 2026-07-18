@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/seymourrisey/sistem-penggajian/internal/model"
@@ -13,6 +14,10 @@ import (
 
 // ErrDepartemenNotFound dikembalikan ketika departemen dengan ID tertentu tidak ditemukan.
 var ErrDepartemenNotFound = errors.New("departemen tidak ditemukan")
+
+// ErrDepartemenNamaSudahAda dikembalikan ketika nama departemen sudah terdaftar
+// (mapping dari pelanggaran UNIQUE constraint pada kolom nama).
+var ErrDepartemenNamaSudahAda = errors.New("nama departemen sudah terdaftar")
 
 // DepartemenRepository mendefinisikan kontrak akses data untuk entitas Departemen.
 type DepartemenRepository interface {
@@ -33,7 +38,7 @@ func NewDepartemenRepository(db *pgxpool.Pool) DepartemenRepository {
 	return &departemenRepository{db: db}
 }
 
-// CreateDepartemen menambahkan departemen baru dan mengisi ID serta CreatedAt hasil insert.
+// Create menambahkan departemen baru dan mengisi ID serta CreatedAt hasil insert.
 func (r *departemenRepository) Create(ctx context.Context, d *model.Departemen) error {
 	query := `
 		INSERT INTO departemen (nama)
@@ -42,6 +47,9 @@ func (r *departemenRepository) Create(ctx context.Context, d *model.Departemen) 
 	`
 	err := r.db.QueryRow(ctx, query, d.Nama).Scan(&d.ID, &d.CreatedAt)
 	if err != nil {
+		if mapped := mapDepartemenPgError(err); mapped != nil {
+			return mapped
+		}
 		return fmt.Errorf("gagal insert departemen: %w", err)
 	}
 	return nil
@@ -77,7 +85,6 @@ func (r *departemenRepository) GetAll(ctx context.Context) ([]model.Departemen, 
 		return nil, fmt.Errorf("gagal ambil daftar departemen: %w", err)
 	}
 	defer rows.Close()
-
 	var result []model.Departemen
 	for rows.Next() {
 		var d model.Departemen
@@ -92,7 +99,7 @@ func (r *departemenRepository) GetAll(ctx context.Context) ([]model.Departemen, 
 	return result, nil
 }
 
-// UpdateDepartemen mengubah nama departemen berdasarkan ID.
+// Update mengubah nama departemen berdasarkan ID.
 func (r *departemenRepository) Update(ctx context.Context, d *model.Departemen) error {
 	query := `
 		UPDATE departemen
@@ -101,6 +108,9 @@ func (r *departemenRepository) Update(ctx context.Context, d *model.Departemen) 
 	`
 	cmdTag, err := r.db.Exec(ctx, query, d.Nama, d.ID)
 	if err != nil {
+		if mapped := mapDepartemenPgError(err); mapped != nil {
+			return mapped
+		}
 		return fmt.Errorf("gagal update departemen id=%d: %w", d.ID, err)
 	}
 	if cmdTag.RowsAffected() == 0 {
@@ -119,6 +129,18 @@ func (r *departemenRepository) Delete(ctx context.Context, id int) error {
 	}
 	if cmdTag.RowsAffected() == 0 {
 		return ErrDepartemenNotFound
+	}
+	return nil
+}
+
+// mapDepartemenPgError menerjemahkan Postgres error code 23505 (unique violation
+// pada kolom nama) menjadi ErrDepartemenNamaSudahAda. Mengembalikan nil jika
+// error bukan pelanggaran constraint yang dikenali, supaya caller tetap
+// membungkusnya dengan fmt.Errorf seperti sebelumnya.
+func mapDepartemenPgError(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		return ErrDepartemenNamaSudahAda
 	}
 	return nil
 }

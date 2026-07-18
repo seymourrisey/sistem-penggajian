@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/seymourrisey/sistem-penggajian/internal/model"
@@ -13,6 +14,14 @@ import (
 
 // ErrKaryawanNotFound dikembalikan ketika karyawan dengan ID/NIP tertentu tidak ditemukan.
 var ErrKaryawanNotFound = errors.New("karyawan tidak ditemukan")
+
+// ErrNipSudahAda dikembalikan ketika NIP sudah terdaftar
+// (mapping dari pelanggaran UNIQUE constraint pada kolom nip).
+var ErrNipSudahAda = errors.New("nip sudah terdaftar")
+
+// ErrDepartemenTidakValid dikembalikan ketika departemen_id yang dirujuk tidak ada
+// (mapping dari pelanggaran FK constraint karyawan.departemen_id -> departemen.id).
+var ErrDepartemenTidakValid = errors.New("departemen_id tidak valid atau tidak ditemukan")
 
 // KaryawanRepository mendefinisikan kontrak akses data untuk entitas Karyawan.
 type KaryawanRepository interface {
@@ -54,6 +63,9 @@ func (r *karyawanRepository) Create(ctx context.Context, k *model.Karyawan) erro
 		k.NIP, k.Nama, k.DepartemenID, k.Jabatan, k.GajiPokok, k.TanggalMasuk, k.Status,
 	).Scan(&k.ID, &k.CreatedAt, &k.UpdatedAt)
 	if err != nil {
+		if mapped := mapKaryawanPgError(err); mapped != nil {
+			return mapped
+		}
 		return fmt.Errorf("gagal insert karyawan: %w", err)
 	}
 	return nil
@@ -143,6 +155,9 @@ func (r *karyawanRepository) Update(ctx context.Context, k *model.Karyawan) erro
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrKaryawanNotFound
 		}
+		if mapped := mapKaryawanPgError(err); mapped != nil {
+			return mapped
+		}
 		return fmt.Errorf("gagal update karyawan id=%d: %w", k.ID, err)
 	}
 	return nil
@@ -162,6 +177,25 @@ func (r *karyawanRepository) SoftDelete(ctx context.Context, id int) error {
 	}
 	if cmdTag.RowsAffected() == 0 {
 		return ErrKaryawanNotFound
+	}
+	return nil
+}
+
+// mapKaryawanPgError menerjemahkan Postgres error code menjadi sentinel error repository:
+//   - 23505 (unique violation, kolom nip)          -> ErrNipSudahAda
+//   - 23503 (foreign key violation, departemen_id) -> ErrDepartemenTidakValid
+//
+// Mengembalikan nil jika error bukan pelanggaran constraint yang dikenali,
+// supaya caller tetap membungkusnya dengan fmt.Errorf seperti sebelumnya.
+func mapKaryawanPgError(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.Code {
+		case "23505":
+			return ErrNipSudahAda
+		case "23503":
+			return ErrDepartemenTidakValid
+		}
 	}
 	return nil
 }
