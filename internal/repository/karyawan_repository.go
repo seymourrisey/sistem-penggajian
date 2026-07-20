@@ -143,13 +143,12 @@ func (r *karyawanRepository) Update(ctx context.Context, k *model.Karyawan) erro
 		    jabatan = $4,
 		    gaji_pokok = $5,
 		    tanggal_masuk = $6,
-		    status = $7,
 		    updated_at = NOW()
-		WHERE id = $8
+		WHERE id = $7
 		RETURNING updated_at
 	`
 	err := r.db.QueryRow(ctx, query,
-		k.NIP, k.Nama, k.DepartemenID, k.Jabatan, k.GajiPokok, k.TanggalMasuk, k.Status, k.ID,
+		k.NIP, k.Nama, k.DepartemenID, k.Jabatan, k.GajiPokok, k.TanggalMasuk, k.ID,
 	).Scan(&k.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

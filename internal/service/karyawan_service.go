@@ -1,4 +1,3 @@
-// Path: internal/service/karyawan_service.go
 package service
 
 import (

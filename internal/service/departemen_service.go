@@ -1,4 +1,3 @@
-// Path: internal/service/departemen_service.go
 package service
 
 import (
