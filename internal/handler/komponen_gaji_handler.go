@@ -69,6 +69,7 @@ func (h *KomponenGajiHandler) Create(c *gin.Context) {
 }
 
 // Update menangani PUT /api/karyawan/:id/komponen-gaji/:id.
+// Memperbarui komponen gaji yang sudah ada berdasarkan ID komponen dan karyawan.
 func (h *KomponenGajiHandler) Update(c *gin.Context) {
 	karyawanID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
