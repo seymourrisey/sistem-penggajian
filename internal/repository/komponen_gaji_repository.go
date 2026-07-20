@@ -12,7 +12,7 @@ import (
 	"github.com/seymourrisey/sistem-penggajian/internal/model"
 )
 
-var ErrKomponenGajiNotFound = errors.New("komponen gaji not found")
+var ErrKomponenGajiNotFound = errors.New("komponen gaji tidak ditemukan")
 var ErrKaryawanTidakValid = errors.New("karyawan_id tidak valid atau tidak ditemukan")
 
 type KomponenGajiRepository interface {
@@ -20,7 +20,7 @@ type KomponenGajiRepository interface {
 	GetByID(ctx context.Context, id int) (*model.KomponenGaji, error)
 	GetByKaryawanID(ctx context.Context, karyawanID int) ([]model.KomponenGaji, error)
 	Update(ctx context.Context, k *model.KomponenGaji) error
-	Delete(ctx context.Context, id int) error
+	// Delete(ctx context.Context, id int) error
 }
 
 type komponenGajiRepository struct {
@@ -108,33 +108,48 @@ func (r *komponenGajiRepository) GetByKaryawanID(ctx context.Context, karyawanID
 func (r *komponenGajiRepository) Update(ctx context.Context, k *model.KomponenGaji) error {
 	query := `
 		UPDATE komponen_gaji
-		SET jenis = $1, nama = $2, nominal = $3, is_persen = $4
-		WHERE id = $5`
+		SET jenis = $1,
+		    nama = $2,
+		    nominal = $3,
+		    is_persen = $4
+		WHERE id = $5
+		  AND karyawan_id = $6`
 
-	tag, err := r.db.Exec(ctx, query, k.Jenis, k.Nama, k.Nominal, k.IsPersen, k.ID)
+	tag, err := r.db.Exec(
+		ctx,
+		query,
+		k.Jenis,
+		k.Nama,
+		k.Nominal,
+		k.IsPersen,
+		k.ID,
+		k.KaryawanID,
+	)
 	if err != nil {
 		return err
 	}
+
 	if tag.RowsAffected() == 0 {
 		return ErrKomponenGajiNotFound
 	}
+
 	return nil
 }
 
-// Delete menghapus permanen record komponen_gaji (hard delete — tabel ini
-// tidak memiliki kolom status, konsisten dengan pola departemen_repository).
-func (r *komponenGajiRepository) Delete(ctx context.Context, id int) error {
-	query := `DELETE FROM komponen_gaji WHERE id = $1`
+// // Delete menghapus permanen record komponen_gaji (hard delete — tabel ini
+// // tidak memiliki kolom status, konsisten dengan pola departemen_repository).
+// func (r *komponenGajiRepository) Delete(ctx context.Context, id int) error {
+// 	query := `DELETE FROM komponen_gaji WHERE id = $1`
 
-	tag, err := r.db.Exec(ctx, query, id)
-	if err != nil {
-		return err
-	}
-	if tag.RowsAffected() == 0 {
-		return ErrKomponenGajiNotFound
-	}
-	return nil
-}
+// 	tag, err := r.db.Exec(ctx, query, id)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	if tag.RowsAffected() == 0 {
+// 		return ErrKomponenGajiNotFound
+// 	}
+// 	return nil
+// }
 
 func mapKomponenGajiPgError(err error) error {
 	var pgErr *pgconn.PgError

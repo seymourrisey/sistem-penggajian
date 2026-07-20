@@ -28,6 +28,9 @@ CREATE TABLE komponen_gaji (
     nama        VARCHAR(50) NOT NULL,
     nominal     NUMERIC(12,2) NOT NULL CHECK (nominal >= 0),
     is_persen   BOOLEAN DEFAULT FALSE
+
+    CONSTRAINT uq_komponen_gaji_karyawan_jenis_nama
+    UNIQUE (karyawan_id, jenis, nama)
 );
 
 CREATE TABLE payroll (

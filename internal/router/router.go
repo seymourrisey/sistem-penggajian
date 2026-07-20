@@ -32,6 +32,9 @@ func NewRouter(
 
 		// Komponen Gaji (nested di bawah karyawan)
 		api.POST("/karyawan/:id/komponen-gaji", komponenGajiHandler.Create)
+		api.GET("/karyawan/:id/komponen-gaji", komponenGajiHandler.GetByKaryawanID)
+		api.PUT("/karyawan/:id/komponen-gaji/:komponen_id", komponenGajiHandler.Update)
+		api.GET("/komponen-gaji/:id", komponenGajiHandler.GetByID)
 
 		// Payroll
 		api.POST("/payroll/generate", payrollHandler.Generate)
