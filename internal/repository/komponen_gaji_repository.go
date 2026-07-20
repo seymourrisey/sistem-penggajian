@@ -3,14 +3,17 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/seymourrisey/sistem-penggajian/internal/model"
 )
 
 var ErrKomponenGajiNotFound = errors.New("komponen gaji not found")
+var ErrKaryawanTidakValid = errors.New("karyawan_id tidak valid atau tidak ditemukan")
 
 type KomponenGajiRepository interface {
 	Create(ctx context.Context, k *model.KomponenGaji) error
@@ -35,12 +38,14 @@ func (r *komponenGajiRepository) Create(ctx context.Context, k *model.KomponenGa
 		INSERT INTO komponen_gaji (karyawan_id, jenis, nama, nominal, is_persen)
 		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id`
-
 	err := r.db.QueryRow(ctx, query,
 		k.KaryawanID, k.Jenis, k.Nama, k.Nominal, k.IsPersen,
 	).Scan(&k.ID)
 	if err != nil {
-		return err
+		if mapped := mapKomponenGajiPgError(err); mapped != nil {
+			return mapped
+		}
+		return fmt.Errorf("gagal membuat komponen gaji untuk karyawan_id=%d: %w", k.KaryawanID, err)
 	}
 	return nil
 }
@@ -127,6 +132,17 @@ func (r *komponenGajiRepository) Delete(ctx context.Context, id int) error {
 	}
 	if tag.RowsAffected() == 0 {
 		return ErrKomponenGajiNotFound
+	}
+	return nil
+}
+
+func mapKomponenGajiPgError(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.Code {
+		case "23503":
+			return ErrKaryawanTidakValid
+		}
 	}
 	return nil
 }

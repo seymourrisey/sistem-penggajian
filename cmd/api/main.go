@@ -1,10 +1,13 @@
 package main
 
 import (
-	"context"
 	"log"
 
 	"github.com/seymourrisey/sistem-penggajian/internal/config"
+	"github.com/seymourrisey/sistem-penggajian/internal/handler"
+	"github.com/seymourrisey/sistem-penggajian/internal/repository"
+	"github.com/seymourrisey/sistem-penggajian/internal/router"
+	"github.com/seymourrisey/sistem-penggajian/internal/service"
 	"github.com/seymourrisey/sistem-penggajian/pkg/database"
 )
 
@@ -19,11 +22,35 @@ func main() {
 		log.Fatalf("gagal konek database: %v", err)
 	}
 	defer pool.Close()
+	log.Println("database: koneksi berhasil")
 
-	var result int
-	if err := pool.QueryRow(context.Background(), "SELECT 1").Scan(&result); err != nil {
-		log.Fatalf("query test gagal: %v", err)
+	// Repository layer
+	departemenRepo := repository.NewDepartemenRepository(pool)
+	karyawanRepo := repository.NewKaryawanRepository(pool)
+	komponenGajiRepo := repository.NewKomponenGajiRepository(pool)
+	payrollRepo := repository.NewPayrollRepository(pool)
+
+	// Service layer
+	departemenSvc := service.NewDepartemenService(departemenRepo)
+	karyawanSvc := service.NewKaryawanService(karyawanRepo)
+	komponenGajiSvc := service.NewKomponenGajiService(komponenGajiRepo)
+	payrollSvc := service.NewPayrollService(karyawanRepo, komponenGajiRepo, payrollRepo)
+
+	// Handler layer
+	departemenHandler := handler.NewDepartemenHandler(departemenSvc)
+	karyawanHandler := handler.NewKaryawanHandler(karyawanSvc)
+	komponenGajiHandler := handler.NewKomponenGajiHandler(komponenGajiSvc)
+	payrollHandler := handler.NewPayrollHandler(payrollSvc)
+
+	// Router
+	r := router.NewRouter(
+		departemenHandler,
+		karyawanHandler,
+		komponenGajiHandler,
+		payrollHandler)
+
+	log.Printf("server berjalan di port %s", cfg.AppPort)
+	if err := r.Run(":" + cfg.AppPort); err != nil {
+		log.Fatalf("gagal menjalankan server: %v", err)
 	}
-
-	log.Println("database: koneksi berhasil!!")
 }

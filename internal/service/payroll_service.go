@@ -16,6 +16,8 @@ var seratus = decimal.NewFromInt(100)
 
 type PayrollService interface {
 	GeneratePayroll(ctx context.Context, karyawanID int, periode time.Time) (*model.Payroll, error)
+	GetRiwayat(ctx context.Context, karyawanID int) ([]model.PayrollRiwayat, error)
+	GetLaporan(ctx context.Context, periode time.Time) ([]model.LaporanDepartemen, error)
 }
 
 type payrollService struct {
@@ -37,7 +39,7 @@ func NewPayrollService(
 }
 
 // GeneratePayroll menghitung dan menyimpan slip gaji satu karyawan untuk satu
-// periode (F4). Algoritma:
+// periode. Algoritma:
 //  1. Ambil gaji_pokok karyawan.
 //  2. Ambil seluruh komponen_gaji milik karyawan tsb.
 //  3. Loop komponen: jika is_persen true, nilai = gaji_pokok * nominal / 100;
@@ -46,13 +48,6 @@ func NewPayrollService(
 //  4. Sum nilai per jenis -> total_tunjangan, total_potongan.
 //  5. gaji_bersih = gaji_pokok + total_tunjangan - total_potongan.
 //  6. Simpan sebagai record payroll baru berstatus "draft".
-//
-// Pemetaan error: karyawan tidak ditemukan -> repository.ErrKaryawanNotFound;
-// kombinasi karyawan_id+periode sudah pernah digenerate ->
-// repository.ErrPayrollAlreadyExists (dipetakan di PayrollRepository.Create
-// dari constraint UNIQUE, tidak ada query cek terpisah di layer ini).
-// Fungsi ini sengaja tidak menyentuh HTTP sama sekali agar mudah diuji
-// terpisah lewat mock repository (kompetensi #9).
 func (s *payrollService) GeneratePayroll(ctx context.Context, karyawanID int, periode time.Time) (*model.Payroll, error) {
 	karyawan, err := s.karyawanRepo.GetByID(ctx, karyawanID)
 	if err != nil {
@@ -95,6 +90,26 @@ func (s *payrollService) GeneratePayroll(ctx context.Context, karyawanID int, pe
 	}
 
 	return payroll, nil
+}
+
+// GetRiwayat mengambil riwayat gaji satu karyawan (F5). Memvalidasi karyawan_id
+// exist lebih dulu lewat karyawanRepo.GetByID — jika tidak ditemukan,
+// mengembalikan repository.ErrKaryawanNotFound (dipetakan ke 404 di handler),
+// alih-alih diam-diam mengembalikan array kosong.
+func (s *payrollService) GetRiwayat(ctx context.Context, karyawanID int) ([]model.PayrollRiwayat, error) {
+	if _, err := s.karyawanRepo.GetByID(ctx, karyawanID); err != nil {
+		return nil, err
+	}
+	return s.payrollRepo.GetRiwayatByKaryawanID(ctx, karyawanID)
+}
+
+// GetLaporan mengambil laporan agregat gaji per departemen untuk satu
+// periode. Passthrough langsung ke repository — tidak ada validasi
+// tambahan; periode yang tidak punya data payroll sama sekali akan
+// menghasilkan slice kosong (bukan error), konsisten dengan sifat query
+// agregat (bukan lookup by ID tunggal).
+func (s *payrollService) GetLaporan(ctx context.Context, periode time.Time) ([]model.LaporanDepartemen, error) {
+	return s.payrollRepo.GetLaporanAgregat(ctx, periode)
 }
 
 // hitungNilaiKomponen menghitung nilai rupiah satu komponen_gaji terhadap
