@@ -19,6 +19,9 @@ func NewRouter(
 		// Departemen
 		api.POST("/departemen", departemenHandler.Create)
 		api.GET("/departemen", departemenHandler.GetAll)
+		api.GET("/departemen/:id", departemenHandler.GetByID)
+		api.PUT("/departemen/:id", departemenHandler.Update)
+		api.DELETE("/departemen/:id", departemenHandler.Delete)
 
 		// Karyawan
 		api.POST("/karyawan", karyawanHandler.Create)

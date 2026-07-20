@@ -3,6 +3,7 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/seymourrisey/sistem-penggajian/internal/model"
@@ -20,6 +21,10 @@ func NewDepartemenHandler(svc service.DepartemenService) *DepartemenHandler {
 }
 
 type departemenCreateRequest struct {
+	Nama string `json:"nama" binding:"required"`
+}
+
+type departemenUpdateRequest struct {
 	Nama string `json:"nama" binding:"required"`
 }
 
@@ -49,6 +54,68 @@ func (h *DepartemenHandler) GetAll(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, list)
+}
+
+// GetByID menangani GET /api/departemen/{id}.
+func (h *DepartemenHandler) GetByID(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	d, err := h.svc.GetByID(c.Request.Context(), id)
+	if err != nil {
+		mapDepartemenError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, d)
+}
+
+// Update menangani PUT /api/departemen/{id}.
+func (h *DepartemenHandler) Update(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	var req departemenUpdateRequest
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	dept := &model.Departemen{
+		ID:   id,
+		Nama: req.Nama,
+	}
+
+	if err := h.svc.Update(c.Request.Context(), dept); err != nil {
+		mapDepartemenError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "departemen berhasil di update",
+	})
+}
+
+// Delete menangani DELETE /api/departemen/{id}.
+func (h *DepartemenHandler) Delete(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	if err := h.svc.Delete(c.Request.Context(), id); err != nil {
+		mapDepartemenError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "departemen berhasil di delete"})
 }
 
 func mapDepartemenError(c *gin.Context, err error) {

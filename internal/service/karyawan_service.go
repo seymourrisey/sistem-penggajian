@@ -64,7 +64,7 @@ func (s *karyawanService) Update(ctx context.Context, k *model.Karyawan) error {
 	return s.repo.Update(ctx, k)
 }
 
-// SoftDelete mengubah status karyawan menjadi nonaktif (F1) — bukan hard delete.
+// SoftDelete mengubah status karyawan menjadi nonaktif bukan HARD DELETE.
 // Tidak ada validasi tambahan; diteruskan langsung ke repository.
 func (s *karyawanService) SoftDelete(ctx context.Context, id int) error {
 	return s.repo.SoftDelete(ctx, id)
