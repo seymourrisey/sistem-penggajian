@@ -30,7 +30,7 @@ CREATE TABLE komponen_gaji (
     is_persen   BOOLEAN DEFAULT FALSE
 
     CONSTRAINT uq_komponen_gaji_karyawan_jenis_nama
-    UNIQUE (karyawan_id, jenis, nama)
+            UNIQUE (karyawan_id, jenis, nama)
 );
 
 CREATE TABLE payroll (
