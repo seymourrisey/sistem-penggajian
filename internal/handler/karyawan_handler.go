@@ -48,6 +48,53 @@ type karyawanUpdateRequest struct {
 	TanggalMasuk string          `json:"tanggal_masuk" binding:"required"`
 }
 
+type karyawanResponse struct {
+	ID           int                  `json:"id" db:"id"`
+	NIP          string               `json:"nip" db:"nip"`
+	Nama         string               `json:"nama" db:"nama"`
+	DepartemenID int                  `json:"departemen_id" db:"departemen_id"`
+	Jabatan      string               `json:"jabatan" db:"jabatan"`
+	GajiPokok    decimal.Decimal      `json:"gaji_pokok" db:"gaji_pokok"`
+	TanggalMasuk string               `json:"tanggal_masuk" db:"tanggal_masuk"`
+	Status       model.StatusKaryawan `json:"status" db:"status"`
+	CreatedAt    time.Time            `json:"created_at" db:"created_at"`
+	UpdatedAt    time.Time            `json:"updated_at" db:"updated_at"`
+}
+
+func newKaryawanResponse(k *model.Karyawan) karyawanResponse {
+	return karyawanResponse{
+		ID:           k.ID,
+		NIP:          k.NIP,
+		Nama:         k.Nama,
+		DepartemenID: k.DepartemenID,
+		Jabatan:      k.Jabatan,
+		GajiPokok:    k.GajiPokok,
+		TanggalMasuk: k.TanggalMasuk.Format(dateOnlyLayout),
+		Status:       k.Status,
+		CreatedAt:    k.CreatedAt,
+		UpdatedAt:    k.UpdatedAt,
+	}
+}
+
+func listKaryawanResponse(list []model.Karyawan) []karyawanResponse {
+	resp := make([]karyawanResponse, 0, len(list))
+	for _, k := range list {
+		resp = append(resp, karyawanResponse{
+			ID:           k.ID,
+			NIP:          k.NIP,
+			Nama:         k.Nama,
+			DepartemenID: k.DepartemenID,
+			Jabatan:      k.Jabatan,
+			GajiPokok:    k.GajiPokok,
+			TanggalMasuk: k.TanggalMasuk.Format(dateOnlyLayout),
+			Status:       k.Status,
+			CreatedAt:    k.CreatedAt,
+			UpdatedAt:    k.UpdatedAt,
+		})
+	}
+	return resp
+}
+
 // Create menangani POST /api/karyawan.
 func (h *KaryawanHandler) Create(c *gin.Context) {
 	var req karyawanCreateRequest
@@ -76,7 +123,7 @@ func (h *KaryawanHandler) Create(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, k)
+	c.JSON(http.StatusCreated, newKaryawanResponse(k))
 }
 
 // GetAll menangani GET /api/karyawan, dengan filter opsional ?departemen=.
@@ -97,7 +144,7 @@ func (h *KaryawanHandler) GetAll(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, list)
+	c.JSON(http.StatusOK, listKaryawanResponse(list))
 }
 
 // GetByID menangani GET /api/karyawan/:id.
@@ -114,7 +161,7 @@ func (h *KaryawanHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, k)
+	c.JSON(http.StatusOK, newKaryawanResponse(k))
 }
 
 // Update menangani PUT /api/karyawan/:id.
@@ -152,7 +199,7 @@ func (h *KaryawanHandler) Update(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, k)
+	c.JSON(http.StatusOK, newKaryawanResponse(k))
 }
 
 // SoftDelete menangani DELETE /api/karyawan/:id (ubah status jadi nonaktif).

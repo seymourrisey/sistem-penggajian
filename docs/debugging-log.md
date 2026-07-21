@@ -1,0 +1,448 @@
+# Debugging Log — Sistem Informasi Penggajian
+
+**Bukti Kompetensi:** #6 — Melakukan Debugging
+**Metode:** Exploratory testing manual via Postman terhadap seluruh endpoint REST API, dilakukan setelah handler + router + wiring selesai
+**Total kasus:** 10 bug ditemukan, 10 bug diperbaiki dan diverifikasi ulang.
+
+---
+
+## Cara Membaca Dokumen Ini
+
+Setiap kasus dicatat dengan struktur yang sama:
+- **Langkah Reproduksi** — request persis yang memicu bug.
+- **Before** — response/behavior sebelum fix (bukti bug nyata terjadi, bukan hipotesis).
+- **Root Cause** — analisis kenapa bug terjadi, bukan cuma gejalanya.
+- **Fix (After)** — perubahan kode yang menyelesaikan root cause.
+- **Verifikasi** — hasil retest setelah fix diterapkan, bukti bug sudah tidak muncul lagi.
+
+---
+
+## Bug #1 — Delete Departemen yang Masih Direferensikan Karyawan Menghasilkan 500, Bukan 409
+
+**Endpoint:** `DELETE /api/departemen/:id`
+**Severity:** Medium (kesalahan HTTP semantic — client error dianggap server error)
+
+### Langkah Reproduksi
+```
+DELETE /api/departemen/1
+```
+(Departemen ID 1 masih punya minimal 1 karyawan yang mereferensikannya)
+
+### Before
+```
+Status: 500 Internal Server Error
+```
+```json
+{
+  "error": "gagal hapus departemen id=1: ERROR: update or delete on table \"departemen\" violates foreign key constraint \"karyawan_departemen_id_fkey\" on table \"karyawan\" (SQLSTATE 23503)"
+}
+```
+
+### Root Cause
+`departemenRepository.Delete` tidak melakukan mapping terhadap Postgres error code — semua error dari `Exec` langsung dibungkus generik dengan `fmt.Errorf`, termasuk pelanggaran foreign key constraint (kode `23503`). Akibatnya, kesalahan yang sebetulnya disebabkan oleh input/state yang tidak valid dari sisi client (mencoba hapus resource yang masih dipakai) diklasifikasikan sebagai kegagalan server (500), dan pesan error mentah PostgreSQL (termasuk nama constraint internal) bocor ke response API.
+
+### Fix (After)
+Tambah sentinel error baru dan mapping pgcode di `internal/repository/departemen_repository.go`:
+```go
+var ErrDepartemenMasihDipakai = errors.New("departemen tidak dapat dihapus karena masih direferensikan karyawan")
+
+func (r *departemenRepository) Delete(ctx context.Context, id int) error {
+	query := `DELETE FROM departemen WHERE id = $1`
+	cmdTag, err := r.db.Exec(ctx, query, id)
+	if err != nil {
+		if mapped := mapDepartemenPgError(err); mapped != nil {
+			return mapped
+		}
+		return fmt.Errorf("gagal hapus departemen id=%d: %w", id, err)
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return ErrDepartemenNotFound
+	}
+	return nil
+}
+
+func mapDepartemenPgError(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.Code {
+		case "23505":
+			return ErrDepartemenNamaSudahAda
+		case "23503":
+			return ErrDepartemenMasihDipakai
+		}
+	}
+	return nil
+}
+```
+Handler layer (`mapDepartemenError`) menambahkan case untuk sentinel baru ini → HTTP 409.
+
+### Verifikasi
+```
+DELETE /api/departemen/1
+```
+```
+Status: 409 Conflict
+```
+```json
+{
+  "error": "departemen tidak dapat dihapus karena masih direferensikan karyawan"
+}
+```
+Confirmed via Postman, log server: `[GIN] ... | 409 | ... | DELETE "/api/departemen/1"`.
+
+---
+
+## Bug #2, #3, #4, #5 — Pesan Error Mentah dari Library Bocor ke Client (4 Kasus, 1 Root Cause)
+
+Empat kasus di bawah ini digabung karena akar masalahnya identik: seluruh handler mengirim `err.Error()` langsung dari `c.ShouldBindJSON()` ke response client tanpa translasi, sehingga pesan internal Go/library bocor ke API publik.
+
+**Endpoint terdampak:** semua endpoint yang menerima JSON body (`POST`/`PUT` di departemen, karyawan, komponen-gaji, payroll)
+**Severity:** Medium (bukan security-critical, tapi API contract rusak — pesan tidak konsisten bahasa Indonesia, membocorkan nama struct internal)
+
+### Kasus #2 — Field Required Kosong (string `""`)
+
+**Langkah Reproduksi**
+```
+POST /api/departemen
+{"nama": ""}
+```
+
+**Before**
+```
+Status: 400 Bad Request
+```
+```json
+{
+  "error": "Key: 'departemenCreateRequest.Nama' Error:Field validation for 'Nama' failed on the 'required' tag"
+}
+```
+
+### Kasus #3 — Field Numerik Dikirim Sebagai String Kosong
+
+**Langkah Reproduksi**
+```
+POST /api/karyawan
+{"nip":"", "nama":"", "departemen_id":"", "jabatan":"", "gaji_pokok":"", "tanggal_masuk":""}
+```
+
+**Before**
+```
+Status: 400 Bad Request
+```
+```json
+{
+  "error": "error decoding string '\"\"': can't convert \"\" to decimal"
+}
+```
+
+### Kasus #4 — Type Mismatch pada Field JSON
+
+**Langkah Reproduksi**
+```
+POST /api/karyawan
+{"nip":"TESTXXX", "nama":"", "departemen_id":"<>a", "jabatan":"1241", "gaji_pokok":"9999", "tanggal_masuk":"2026-03-03"}
+```
+
+**Before**
+```
+Status: 400 Bad Request
+```
+```json
+{
+  "error": "json: cannot unmarshal string into Go struct field karyawanCreateRequest.departemen_id of type int"
+}
+```
+
+### Kasus #5 — Partial Update Memicu Validator Error Bertumpuk
+
+**Langkah Reproduksi**
+```
+PUT /api/karyawan/1
+{"nama": "Tom Pearl"}
+```
+
+**Before**
+```
+Status: 400 Bad Request
+```
+```json
+{
+  "error": "Key: 'karyawanUpdateRequest.NIP' Error:Field validation for 'NIP' failed on the 'required' tag\nKey: 'karyawanUpdateRequest.DepartemenID' Error:Field validation for 'DepartemenID' failed on the 'required' tag\nKey: 'karyawanUpdateRequest.Jabatan' Error:Field validation for 'Jabatan' failed on the 'required' tag\nKey: 'karyawanUpdateRequest.TanggalMasuk' Error:Field validation for 'TanggalMasuk' failed on the 'required' tag"
+}
+```
+
+### Root Cause (untuk keempat kasus)
+Semua handler menulis pola yang sama:
+```go
+if err := c.ShouldBindJSON(&req); err != nil {
+    c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+    return
+}
+```
+`err` di sini bisa berasal dari 3 sumber berbeda tergantung jenis kegagalan — `validator.ValidationErrors` (tag `required` gagal), `*json.UnmarshalTypeError` (tipe data JSON tidak cocok dengan struct Go), atau error generik dari custom `UnmarshalJSON` milik tipe lain (`decimal.Decimal`) — dan ketiganya diteruskan mentah-mentah tanpa dibedakan atau diterjemahkan.
+
+### Fix (After)
+Dibuat satu helper terpusat di file baru `internal/handler/bind_error.go`, dipakai di seluruh handler (7 lokasi lintas 4 file):
+```go
+func translateBindError(err error) string {
+	var ve validator.ValidationErrors
+	if errors.As(err, &ve) {
+		return "input tidak lengkap: pastikan semua field wajib sudah diisi"
+	}
+
+	var ute *json.UnmarshalTypeError
+	if errors.As(err, &ute) {
+		return fmt.Sprintf("field '%s' memiliki tipe data yang salah", ute.Field)
+	}
+
+	var se *json.SyntaxError
+	if errors.As(err, &se) {
+		return "format JSON tidak valid"
+	}
+
+	return "data yang dikirim tidak valid, periksa kembali format dan isi field"
+}
+```
+Semua handler diubah dari `gin.H{"error": err.Error()}` menjadi `gin.H{"error": translateBindError(err)}` tepat setelah `ShouldBindJSON` gagal.
+
+### Verifikasi
+| Kasus | Response Setelah Fix |
+|---|---|
+| #2 (nama kosong) | `400` — `{"error": "input tidak lengkap: pastikan semua field wajib sudah diisi"}` |
+| #3 (decimal kosong) | `400` — `{"error": "data yang dikirim tidak valid, periksa kembali format dan isi field"}` |
+| #4 (type mismatch) | `400` — `{"error": "field 'departemen_id' memiliki tipe data yang salah"}` |
+| #5 (partial update) | `400` — `{"error": "input tidak lengkap: pastikan semua field wajib sudah diisi"}` |
+
+Keempat kasus dites ulang via Postman, semua konsisten bahasa Indonesia, tidak ada lagi pesan mentah library atau nama struct internal yang bocor.
+
+---
+
+## Bug #6 & #7 — Duplikat Komponen Gaji Bisa Tersimpan, Error Duplikat Saat Update Bocor Mentah (2 Kasus, 1 Root Cause)
+
+**Endpoint terdampak:** `POST /api/karyawan/:id/komponen-gaji`, `PUT /api/karyawan/:id/komponen-gaji/:komponen_id`
+**Severity:** High — kasus #6 adalah data integrity issue (data invalid bisa tersimpan), bukan cuma masalah kosmetik error message.
+
+### Kasus #6 — Insert Duplikat Diterima Tanpa Ditolak
+
+**Langkah Reproduksi**
+```
+POST /api/karyawan/1/komponen-gaji
+{"jenis": "tunjangan", "nama": "Transport", "nominal": 500000, "is_persen": false}
+```
+Dikirim 2 kali dengan payload identik.
+
+**Before**
+Kedua request berhasil (`201 Created`), menghasilkan 2 row berbeda di tabel `komponen_gaji` dengan `karyawan_id`, `jenis`, dan `nama` yang sama persis — data yang secara bisnis seharusnya tidak valid (satu karyawan tidak boleh punya 2 komponen "Transport" jenis "tunjangan").
+
+### Kasus #7 — Error Duplikat Saat Update Bocor Mentah
+
+**Langkah Reproduksi**
+```
+PUT /api/karyawan/1/komponen-gaji/5
+{"jenis": "tunjangan", "nama": "Transport", "nominal": 500000, "is_persen": false}
+```
+(Karyawan 1 sudah punya komponen lain dengan jenis+nama yang sama)
+
+**Before**
+```
+Status: 500 Internal Server Error
+```
+```json
+{
+  "error": "ERROR: duplicate key value violates unique constraint \"uq_komponen_gaji_karyawan_jenis_nama\" (SQLSTATE 23505)"
+}
+```
+
+### Root Cause
+Dua masalah terpisah yang saling berkaitan:
+1. Tabel `komponen_gaji` di database aktual **belum punya UNIQUE constraint** pada kombinasi `(karyawan_id, jenis, nama)`, walaupun constraint ini sudah tercantum di skema desain (`ProjectDesign.md` section 2.1) — constraint di dokumen tidak pernah benar-benar diterapkan (dieksekusi) ke database.
+2. Fungsi `komponenGajiRepository.Update` tidak pernah memanggil `mapKomponenGajiPgError` sama sekali (berbeda dari `Create` yang sejak awal sudah benar memanggilnya) — begitu constraint di poin 1 ditambahkan, error 23505 dari `Update` tetap bocor mentah karena tidak ada mapping.
+
+### Fix (After)
+**Skema database** (dijalankan manual via pgAdmin4):
+```sql
+ALTER TABLE komponen_gaji
+ADD CONSTRAINT uq_komponen_gaji_karyawan_jenis_nama
+UNIQUE (karyawan_id, jenis, nama);
+```
+
+**Kode** — `internal/repository/komponen_gaji_repository.go`:
+```go
+var ErrKomponenGajiDuplikat = errors.New("komponen gaji dengan jenis dan nama ini sudah ada untuk karyawan tersebut")
+
+func (r *komponenGajiRepository) Update(ctx context.Context, k *model.KomponenGaji) error {
+	query := `
+		UPDATE komponen_gaji
+		SET jenis = $1, nama = $2, nominal = $3, is_persen = $4
+		WHERE id = $5 AND karyawan_id = $6`
+
+	tag, err := r.db.Exec(ctx, query, k.Jenis, k.Nama, k.Nominal, k.IsPersen, k.ID, k.KaryawanID)
+	if err != nil {
+		if mapped := mapKomponenGajiPgError(err); mapped != nil {
+			return mapped
+		}
+		return fmt.Errorf("gagal update komponen gaji id=%d: %w", k.ID, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrKomponenGajiNotFound
+	}
+	return nil
+}
+
+func mapKomponenGajiPgError(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.Code {
+		case "23503":
+			return ErrKaryawanTidakValid
+		case "23505":
+			return ErrKomponenGajiDuplikat
+		}
+	}
+	return nil
+}
+```
+Handler (`mapKomponenGajiError`) menambahkan case `ErrKomponenGajiDuplikat` → HTTP 409.
+
+### Verifikasi
+```
+POST /api/karyawan/1/komponen-gaji
+```
+(payload identik, dikirim setelah 1 komponen sudah ada)
+```
+Status: 409 Conflict
+```
+```json
+{
+  "error": "komponen gaji dengan jenis dan nama ini sudah ada untuk karyawan tersebut"
+}
+```
+Confirmed via Postman untuk kedua endpoint (`Create` dan `Update`), tidak ada lagi duplikat yang bisa tersimpan.
+
+---
+
+## Bug #8 — IDOR: Update Komponen Gaji Bisa Menembus Kepemilikan Karyawan Lain
+
+**Endpoint:** `PUT /api/karyawan/:id/komponen-gaji/:komponen_id`
+**Severity:** High — ini termasuk kategori **security flaw** (Insecure Direct Object Reference / IDOR), bukan sekadar bug fungsional.
+
+### Langkah Reproduksi
+```
+PUT /api/karyawan/1/komponen-gaji/15
+```
+Dengan `komponen_id = 15` sebenarnya adalah milik `karyawan_id = 2`, bukan `karyawan_id = 1`.
+
+### Before
+Request tetap berhasil (`200 OK`) dan **benar-benar mengubah** data komponen gaji milik karyawan 2, meskipun URL menyebutkan `karyawan_id = 1`. Sistem tidak pernah memvalidasi bahwa komponen yang di-update benar-benar milik karyawan yang disebut di URL.
+
+### Root Cause
+Query `UPDATE` pada `komponenGajiRepository.Update` hanya memfilter berdasarkan `id` komponen (`WHERE id = $5`), sama sekali tidak memvalidasi `karyawan_id` dari URL path terhadap `karyawan_id` yang sebenarnya tersimpan di row tersebut. Akibatnya, `karyawan_id` di URL murni kosmetik — siapa pun yang tahu (atau menebak) `komponen_id` yang valid bisa mengubahnya lewat `karyawan_id` mana pun.
+
+### Fix (After)
+```go
+query := `
+    UPDATE komponen_gaji
+    SET jenis = $1, nama = $2, nominal = $3, is_persen = $4
+    WHERE id = $5 AND karyawan_id = $6`
+```
+Ditambahkan klausa `AND karyawan_id = $6` — kalau kombinasi `id` + `karyawan_id` tidak cocok (baik karena ID salah maupun karena komponen itu milik karyawan lain), `RowsAffected()` akan bernilai 0 dan fungsi mengembalikan `ErrKomponenGajiNotFound` (dipetakan ke 404), bukan diam-diam berhasil mengubah row yang salah.
+
+### Verifikasi
+```
+PUT /api/karyawan/1/komponen-gaji/15
+```
+(dengan komponen_id=15 milik karyawan 2)
+```
+Status: 404 Not Found
+```
+```json
+{
+  "error": "komponen gaji tidak ditemukan"
+}
+```
+Data milik karyawan 2 dikonfirmasi tidak berubah setelah request ini dikirim.
+
+---
+
+## Bug #9 — Response Ganda/Corrupt Saat Validasi PUT Departemen Gagal
+
+**Endpoint:** `PUT /api/departemen/:id`
+**Severity:** Medium — tidak menyebabkan data corruption, tapi API contract rusak (client menerima response tidak valid/ambigu).
+
+### Langkah Reproduksi
+```
+PUT /api/departemen/6
+{"nama": ""}
+```
+
+### Before
+Server log menunjukkan warning `[GIN] [WARNING] Headers were already written`, dan response body berpotensi berisi output ganda/tidak konsisten (dua kali proses penulisan response ke connection yang sama).
+
+### Root Cause
+Fungsi `Update` di `departemen_handler.go` menggunakan `c.BindJSON(&req)`, bukan `c.ShouldBindJSON(&req)` seperti seluruh handler lain di project ini. `c.BindJSON` di Gin **otomatis menulis response 400 sendiri** (via `AbortWithError`) begitu validasi gagal — tapi kode di baris berikutnya tetap mengeksekusi `c.JSON(http.StatusBadRequest, ...)` lagi secara manual, menyebabkan response ditulis dua kali ke koneksi HTTP yang sama.
+
+### Fix (After)
+```go
+// Sebelum:
+if err := c.BindJSON(&req); err != nil {
+    c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+    return
+}
+
+// Sesudah:
+if err := c.ShouldBindJSON(&req); err != nil {
+    c.JSON(http.StatusBadRequest, gin.H{"error": translateBindError(err)})
+    return
+}
+```
+`c.ShouldBindJSON` tidak menulis response otomatis — kontrol penuh tetap di tangan handler, konsisten dengan pola yang dipakai di semua handler lain.
+
+### Verifikasi
+```
+PUT /api/departemen/6
+{"nama": ""}
+```
+```
+Status: 400 Bad Request
+```
+```json
+{
+  "error": "input tidak lengkap: pastikan semua field wajib sudah diisi"
+}
+```
+Response bersih, satu JSON object tunggal, tidak ada lagi warning "headers already written" di server log.
+
+---
+
+## Bug #10 — Response JSON Tanggal Menggunakan RFC3339, Tidak Sesuai API Contract
+
+**Endpoint:** 
+- POST /api/payroll/generate
+- GET /api/payroll/:karyawan_id/riwayat
+- GET /api/payroll/laporan
+- POST /api/karyawan
+- GET /api/karyawan
+- GET /api/karyawan/:id
+- PUT /api/karyawan/:id
+
+**Severity:** Medium
+
+
+
+---
+
+## Ringkasan
+
+| # | Bug | Severity | Status |
+|---|---|---|---|
+| 1 | FK violation delete departemen → 500 | Medium | ✅ Fixed & Verified |
+| 2 | Raw validator error (field kosong) | Medium | ✅ Fixed & Verified |
+| 3 | Raw decimal parse error | Medium | ✅ Fixed & Verified |
+| 4 | Raw JSON type mismatch error | Medium | ✅ Fixed & Verified |
+| 5 | Raw validator error (partial update) | Medium | ✅ Fixed & Verified |
+| 6 | Duplikat komponen gaji tersimpan | High | ✅ Fixed & Verified |
+| 7 | Error duplikat saat update bocor mentah | Medium | ✅ Fixed & Verified |
+| 8 | IDOR — update komponen gaji lintas karyawan | High | ✅ Fixed & Verified |
+| 9 | Double response write pada PUT departemen | Medium | ✅ Fixed & Verified |
+
+Seluruh kasus ditemukan melalui exploratory testing manual (Postman), bukan simulasi/hipotesis — setiap "Before" adalah response aktual yang tercatat, dan setiap "Verifikasi" adalah hasil retest aktual setelah fix diterapkan.
