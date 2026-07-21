@@ -42,12 +42,15 @@ func (m *mockKomponenGajiRepo) GetByKaryawanID(ctx context.Context, karyawanID i
 
 type mockPayrollRepo struct {
 	repository.PayrollRepository
-	CreateFunc  func(ctx context.Context, p *model.Payroll) error
-	CreateCalls int
+	CreateFunc func(ctx context.Context, p *model.Payroll) error
+
+	CreateCalls    int
+	CreatedPayroll *model.Payroll // gap #3: capture argumen yang benar-benar dikirim ke Create
 }
 
 func (m *mockPayrollRepo) Create(ctx context.Context, p *model.Payroll) error {
 	m.CreateCalls++
+	m.CreatedPayroll = p
 	return m.CreateFunc(ctx, p)
 }
 
@@ -57,6 +60,8 @@ func TestGeneratePayroll(t *testing.T) {
 	periode := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
 	karyawanID := 1
 
+	errKomponenRepoGagal := errors.New("koneksi database komponen_gaji terputus")
+
 	tunjanganFlat := model.KomponenGaji{
 		KaryawanID: karyawanID, Jenis: model.JenisKomponenTunjangan,
 		Nama: "Transport", Nominal: decimal.NewFromInt(500000), IsPersen: false,
@@ -64,6 +69,10 @@ func TestGeneratePayroll(t *testing.T) {
 	tunjanganPersen := model.KomponenGaji{
 		KaryawanID: karyawanID, Jenis: model.JenisKomponenTunjangan,
 		Nama: "Jabatan", Nominal: decimal.NewFromInt(10), IsPersen: true, // 10% dari gaji_pokok
+	}
+	tunjanganPersenNol := model.KomponenGaji{
+		KaryawanID: karyawanID, Jenis: model.JenisKomponenTunjangan,
+		Nama: "Insentif Kondisional", Nominal: decimal.Zero, IsPersen: true, // 0% — edge case wajib
 	}
 	potonganFlat := model.KomponenGaji{
 		KaryawanID: karyawanID, Jenis: model.JenisKomponenPotongan,
@@ -90,15 +99,22 @@ func TestGeneratePayroll(t *testing.T) {
 		wantTotalPotongan  decimal.Decimal
 		wantGajiBersih     decimal.Decimal
 		wantCreateCalled   bool
+
+		// gap #3: kalau di-set (non-nil), verifikasi field ini di objek yang
+		// benar-benar dikirim ke payrollRepo.Create, bukan cuma return value service.
+		wantCreatedKaryawanID int
+		checkCreatedArgs      bool
 	}{
 		{
-			name:               "normal case: campuran flat & persen, tunjangan & potongan",
-			karyawan:           &model.Karyawan{ID: karyawanID, GajiPokok: decimal.NewFromInt(5000000)},
-			komponenList:       []model.KomponenGaji{tunjanganFlat, tunjanganPersen, potonganFlat, potonganPersen},
-			wantTotalTunjangan: decimal.NewFromInt(1000000), // 500000 + (10% * 5jt = 500000)
-			wantTotalPotongan:  decimal.NewFromInt(300000),  // 200000 + (2% * 5jt = 100000)
-			wantGajiBersih:     decimal.NewFromInt(5700000), // 5jt + 1jt - 300rb
-			wantCreateCalled:   true,
+			name:                  "normal case: campuran flat & persen, tunjangan & potongan",
+			karyawan:              &model.Karyawan{ID: karyawanID, GajiPokok: decimal.NewFromInt(5000000)},
+			komponenList:          []model.KomponenGaji{tunjanganFlat, tunjanganPersen, potonganFlat, potonganPersen},
+			wantTotalTunjangan:    decimal.NewFromInt(1000000), // 500000 + (10% * 5jt = 500000)
+			wantTotalPotongan:     decimal.NewFromInt(300000),  // 200000 + (2% * 5jt = 100000)
+			wantGajiBersih:        decimal.NewFromInt(5700000), // 5jt + 1jt - 300rb
+			wantCreateCalled:      true,
+			checkCreatedArgs:      true,
+			wantCreatedKaryawanID: karyawanID,
 		},
 		{
 			name:               "gaji_pokok nol: persen ikut jadi nol, flat tetap jalan",
@@ -119,7 +135,7 @@ func TestGeneratePayroll(t *testing.T) {
 			wantCreateCalled:   true,
 		},
 		{
-			name:               "is_persen true murni: hanya tunjangan persen",
+			name:               "is_persen true murni: hanya tunjangan persen (10%)",
 			karyawan:           &model.Karyawan{ID: karyawanID, GajiPokok: decimal.NewFromInt(1000000)},
 			komponenList:       []model.KomponenGaji{tunjanganPersen},
 			wantTotalTunjangan: decimal.NewFromInt(100000), // 10% * 1jt
@@ -128,9 +144,34 @@ func TestGeneratePayroll(t *testing.T) {
 			wantCreateCalled:   true,
 		},
 		{
+			// Gap #1: nominal 0% pada is_persen=true. Beda dari kasus 10% di atas —
+			// ini menguji bahwa kontribusi komponen benar-benar 0, bukan sekadar
+			// "ada komponen persen yang diproses". Berguna menangkap bug semacam
+			// pembagian tak terduga saat konversi persen ke desimal (Nominal/100)
+			// ketika Nominal itu sendiri adalah decimal.Zero.
+			name:               "is_persen true dengan nominal 0%: kontribusi harus nol, bukan galat",
+			karyawan:           &model.Karyawan{ID: karyawanID, GajiPokok: decimal.NewFromInt(1000000)},
+			komponenList:       []model.KomponenGaji{tunjanganPersenNol},
+			wantTotalTunjangan: decimal.Zero,
+			wantTotalPotongan:  decimal.Zero,
+			wantGajiBersih:     decimal.NewFromInt(1000000),
+			wantCreateCalled:   true,
+		},
+		{
 			name:             "karyawan tidak ditemukan: harus short-circuit, Create tidak dipanggil",
 			karyawanErr:      repository.ErrKaryawanNotFound,
 			wantErr:          repository.ErrKaryawanNotFound,
+			wantCreateCalled: false,
+		},
+		{
+			// Gap #2: repository komponen_gaji gagal (bukan "not found", tapi infra
+			// error/timeout). Service harus propagate error ini dan TIDAK lanjut
+			// memanggil payrollRepo.Create dengan data tunjangan/potongan yang
+			// belum lengkap/salah.
+			name:             "komponenRepo gagal: harus short-circuit, Create tidak dipanggil",
+			karyawan:         &model.Karyawan{ID: karyawanID, GajiPokok: decimal.NewFromInt(5000000)},
+			komponenErr:      errKomponenRepoGagal,
+			wantErr:          errKomponenRepoGagal,
 			wantCreateCalled: false,
 		},
 		{
@@ -189,6 +230,22 @@ func TestGeneratePayroll(t *testing.T) {
 			createCalled := payrollRepo.CreateCalls > 0
 			if createCalled != tt.wantCreateCalled {
 				t.Errorf("Create called = %v, want %v", createCalled, tt.wantCreateCalled)
+			}
+
+			// Gap #3: return value service benar tidak menjamin argumen ke
+			// repository benar — verifikasi objek yang benar-benar dikirim ke Create.
+			if tt.checkCreatedArgs {
+				if payrollRepo.CreatedPayroll == nil {
+					t.Fatalf("checkCreatedArgs=true tapi payrollRepo.CreatedPayroll nil (Create tidak pernah dipanggil?)")
+				}
+				if payrollRepo.CreatedPayroll.KaryawanID != tt.wantCreatedKaryawanID {
+					t.Errorf("Create dipanggil dengan KaryawanID = %d, want %d",
+						payrollRepo.CreatedPayroll.KaryawanID, tt.wantCreatedKaryawanID)
+				}
+				if !payrollRepo.CreatedPayroll.Periode.Equal(periode) {
+					t.Errorf("Create dipanggil dengan Periode = %v, want %v",
+						payrollRepo.CreatedPayroll.Periode, periode)
+				}
 			}
 		})
 	}
