@@ -11,9 +11,8 @@ import (
 	"github.com/seymourrisey/sistem-penggajian/internal/model"
 )
 
-var ErrPayrollNotFound = errors.New("payroll not found")
-
-var ErrPayrollAlreadyExists = errors.New("payroll already exists for this karyawan and periode")
+var ErrPayrollNotFound = errors.New("payroll tidak ditemukan!")
+var ErrPayrollAlreadyExists = errors.New("payroll sudah ada untuk karyawan dan periode ini!")
 
 // PayrollRepository mendefinisikan operasi akses data untuk tabel payroll,
 // termasuk query gabungan untuk riwayat dan laporan agregat (F5, F6).
