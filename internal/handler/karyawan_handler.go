@@ -52,7 +52,7 @@ type karyawanUpdateRequest struct {
 func (h *KaryawanHandler) Create(c *gin.Context) {
 	var req karyawanCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": translateBindError(err)})
 		return
 	}
 
@@ -79,13 +79,13 @@ func (h *KaryawanHandler) Create(c *gin.Context) {
 	c.JSON(http.StatusCreated, k)
 }
 
-// GetAll menangani GET /api/karyawan, dengan filter opsional ?departemen_id=.
+// GetAll menangani GET /api/karyawan, dengan filter opsional ?departemen=.
 func (h *KaryawanHandler) GetAll(c *gin.Context) {
 	var departemenID *int
-	if raw := c.Query("departemen_id"); raw != "" {
+	if raw := c.Query("departemen"); raw != "" {
 		id, err := strconv.Atoi(raw)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "departemen_id harus berupa angka"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "id departemen harus berupa angka"})
 			return
 		}
 		departemenID = &id
@@ -127,7 +127,7 @@ func (h *KaryawanHandler) Update(c *gin.Context) {
 
 	var req karyawanUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": translateBindError(err)})
 		return
 	}
 

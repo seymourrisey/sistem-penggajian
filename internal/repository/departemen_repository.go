@@ -19,6 +19,11 @@ var ErrDepartemenNotFound = errors.New("departemen tidak ditemukan")
 // (mapping dari pelanggaran UNIQUE constraint pada kolom nama).
 var ErrDepartemenNamaSudahAda = errors.New("nama departemen sudah terdaftar")
 
+// ErrDepartemenMasihDipakai dikembalikan ketika departemen masih
+// direferensikan oleh minimal satu karyawan (mapping dari pelanggaran FK
+// constraint karyawan.departemen_id -> departemen.id saat DELETE).
+var ErrDepartemenMasihDipakai = errors.New("departemen tidak dapat dihapus karena masih direferensikan karyawan")
+
 // DepartemenRepository mendefinisikan kontrak akses data untuk entitas Departemen.
 type DepartemenRepository interface {
 	Create(ctx context.Context, d *model.Departemen) error
@@ -122,9 +127,14 @@ func (r *departemenRepository) Update(ctx context.Context, d *model.Departemen) 
 // Delete menghapus departemen berdasarkan ID (hard delete — tabel departemen
 // tidak memiliki kolom status, berbeda dengan karyawan yang pakai soft-delete).
 func (r *departemenRepository) Delete(ctx context.Context, id int) error {
-	query := `DELETE FROM departemen WHERE id = $1`
+	query := `
+		DELETE FROM departemen WHERE id = $1
+	`
 	cmdTag, err := r.db.Exec(ctx, query, id)
 	if err != nil {
+		if mapped := mapDepartemenPgError(err); mapped != nil {
+			return mapped
+		}
 		return fmt.Errorf("gagal hapus departemen id=%d: %w", id, err)
 	}
 	if cmdTag.RowsAffected() == 0 {
@@ -133,14 +143,20 @@ func (r *departemenRepository) Delete(ctx context.Context, id int) error {
 	return nil
 }
 
-// mapDepartemenPgError menerjemahkan Postgres error code 23505 (unique violation
-// pada kolom nama) menjadi ErrDepartemenNamaSudahAda. Mengembalikan nil jika
-// error bukan pelanggaran constraint yang dikenali, supaya caller tetap
-// membungkusnya dengan fmt.Errorf seperti sebelumnya.
+// mapDepartemenPgError menerjemahkan Postgres error code ke sentinel error
+// domain. 23505 = duplikat nama (dipakai di Create/Update). 23503 = FK
+// violation, terjadi saat Delete departemen yang masih dipakai karyawan.
+// Mengembalikan nil jika error bukan pelanggaran constraint yang dikenali,
+// supaya caller tetap membungkusnya dengan fmt.Errorf seperti sebelumnya.
 func mapDepartemenPgError(err error) error {
 	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-		return ErrDepartemenNamaSudahAda
+	if errors.As(err, &pgErr) {
+		switch pgErr.Code {
+		case "23505":
+			return ErrDepartemenNamaSudahAda
+		case "23503":
+			return ErrDepartemenMasihDipakai
+		}
 	}
 	return nil
 }

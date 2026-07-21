@@ -14,6 +14,7 @@ import (
 
 var ErrKomponenGajiNotFound = errors.New("komponen gaji tidak ditemukan")
 var ErrKaryawanTidakValid = errors.New("karyawan_id tidak valid atau tidak ditemukan")
+var ErrKomponenGajiDuplikat = errors.New("komponen gaji dengan jenis dan nama ini sudah ada untuk karyawan tersebut")
 
 type KomponenGajiRepository interface {
 	Create(ctx context.Context, k *model.KomponenGaji) error
@@ -151,12 +152,17 @@ func (r *komponenGajiRepository) Update(ctx context.Context, k *model.KomponenGa
 // 	return nil
 // }
 
+// mapKomponenGajiPgError menerjemahkan Postgres error code ke sentinel error
+// domain. 23503 = FK karyawan_id invalid (saat Create). 23505 = duplikat
+// kombinasi karyawan_id+jenis+nama (saat Create atau Update).
 func mapKomponenGajiPgError(err error) error {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
 		switch pgErr.Code {
 		case "23503":
 			return ErrKaryawanTidakValid
+		case "23505":
+			return ErrKomponenGajiDuplikat
 		}
 	}
 	return nil

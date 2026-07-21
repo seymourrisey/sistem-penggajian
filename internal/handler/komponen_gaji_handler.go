@@ -48,7 +48,7 @@ func (h *KomponenGajiHandler) Create(c *gin.Context) {
 
 	var req komponenGajiCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": translateBindError(err)})
 		return
 	}
 
@@ -85,7 +85,7 @@ func (h *KomponenGajiHandler) Update(c *gin.Context) {
 
 	var req komponenGajiUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": translateBindError(err)})
 		return
 	}
 
@@ -145,6 +145,10 @@ func mapKomponenGajiError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, repository.ErrKaryawanTidakValid):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	case errors.Is(err, repository.ErrKomponenGajiDuplikat):
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+	case errors.Is(err, repository.ErrKomponenGajiNotFound):
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 	case errors.Is(err, service.ErrKomponenNamaKosong),
 		errors.Is(err, service.ErrJenisKomponenTidakValid):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})

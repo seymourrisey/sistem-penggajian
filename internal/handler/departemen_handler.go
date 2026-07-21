@@ -32,7 +32,7 @@ type departemenUpdateRequest struct {
 func (h *DepartemenHandler) Create(c *gin.Context) {
 	var req departemenCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": translateBindError(err)})
 		return
 	}
 
@@ -82,8 +82,8 @@ func (h *DepartemenHandler) Update(c *gin.Context) {
 	}
 
 	var req departemenUpdateRequest
-	if err := c.BindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": translateBindError(err)})
 		return
 	}
 
@@ -123,6 +123,8 @@ func mapDepartemenError(c *gin.Context, err error) {
 	case errors.Is(err, repository.ErrDepartemenNotFound):
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 	case errors.Is(err, repository.ErrDepartemenNamaSudahAda):
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+	case errors.Is(err, repository.ErrDepartemenMasihDipakai):
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 	case errors.Is(err, service.ErrDepartemenNamaKosong):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})

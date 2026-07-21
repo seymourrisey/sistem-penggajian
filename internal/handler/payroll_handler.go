@@ -33,7 +33,7 @@ type payrollGenerateRequest struct {
 func (h *PayrollHandler) Generate(c *gin.Context) {
 	var req payrollGenerateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": translateBindError(err)})
 		return
 	}
 
