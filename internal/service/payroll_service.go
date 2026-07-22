@@ -40,14 +40,27 @@ func NewPayrollService(
 
 // GeneratePayroll menghitung dan menyimpan slip gaji satu karyawan untuk satu
 // periode. Algoritma:
+//
 //  1. Ambil gaji_pokok karyawan.
+//
 //  2. Ambil seluruh komponen_gaji milik karyawan tsb.
+//
 //  3. Loop komponen: jika is_persen true, nilai = gaji_pokok * nominal / 100;
 //     jika false, nilai = nominal apa adanya. Basis persentase SELALU
 //     gaji_pokok (flat basis, bukan berjenjang) — keputusan bisnis eksplisit.
+//
 //  4. Sum nilai per jenis -> total_tunjangan, total_potongan.
+//
 //  5. gaji_bersih = gaji_pokok + total_tunjangan - total_potongan.
-//  6. Simpan sebagai record payroll baru berstatus "draft".
+//
+//  6. Simpan sebagai record payroll baru berstatus "draft", dibungkus dalam
+//     transaksi pgx eksplisit (tx.Begin() -> Create -> tx.Commit(); jika
+//     error di tengah proses, tx.Rollback())
+//
+//     Catatan: saat ini 'Create' adalah satu-satunya write dalam
+//     transaksi ini (satu INSERT sudah atomik dengan sendirinya di
+//     PostgreSQL) — pembungkusan ini demonstrasi pola untuk operasi kritis
+//     yang scalable, bukan fix atas race condition yang sudah ada.
 func (s *payrollService) GeneratePayroll(ctx context.Context, karyawanID int, periode time.Time) (*model.Payroll, error) {
 	karyawan, err := s.karyawanRepo.GetByID(ctx, karyawanID)
 	if err != nil {
@@ -85,7 +98,18 @@ func (s *payrollService) GeneratePayroll(ctx context.Context, karyawanID int, pe
 		Status:         model.StatusPayrollDraft,
 	}
 
-	if err := s.payrollRepo.Create(ctx, payroll); err != nil {
+	tx, err := s.payrollRepo.BeginTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.payrollRepo.Create(ctx, tx, payroll); err != nil {
+		_ = tx.Rollback(ctx)
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		_ = tx.Rollback(ctx)
 		return nil, err
 	}
 

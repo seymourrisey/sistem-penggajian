@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/shopspring/decimal"
 
 	"github.com/seymourrisey/sistem-penggajian/internal/model"
@@ -40,18 +41,51 @@ func (m *mockKomponenGajiRepo) GetByKaryawanID(ctx context.Context, karyawanID i
 	return m.GetByKaryawanIDFunc(ctx, karyawanID)
 }
 
+// mockTx meng-embed pgx.Tx (nil) dan hanya meng-override Commit/Rollback —
+// dua-duanya method yang benar-benar dipanggil payrollService.GeneratePayroll.
+// Kalau service suatu saat manggil method lain dari pgx.Tx tanpa mock ini
+// diupdate, test akan panic (nil pointer) — sinyal jelas kalau test perlu
+// diperbarui, bukan silently pass.
+type mockTx struct {
+	pgx.Tx
+	CommitErr error
+
+	CommitCalls   int
+	RollbackCalls int
+}
+
+func (m *mockTx) Commit(ctx context.Context) error {
+	m.CommitCalls++
+	return m.CommitErr
+}
+
+func (m *mockTx) Rollback(ctx context.Context) error {
+	m.RollbackCalls++
+	return nil
+}
+
 type mockPayrollRepo struct {
 	repository.PayrollRepository
-	CreateFunc func(ctx context.Context, p *model.Payroll) error
+	CreateFunc func(ctx context.Context, tx pgx.Tx, p *model.Payroll) error
+	BeginTxErr error
 
 	CreateCalls    int
 	CreatedPayroll *model.Payroll // gap #3: capture argumen yang benar-benar dikirim ke Create
+	tx             *mockTx        // instance tx yang dikembalikan BeginTx, dipakai untuk assert Commit/Rollback
 }
 
-func (m *mockPayrollRepo) Create(ctx context.Context, p *model.Payroll) error {
+func (m *mockPayrollRepo) BeginTx(ctx context.Context) (pgx.Tx, error) {
+	if m.BeginTxErr != nil {
+		return nil, m.BeginTxErr
+	}
+	m.tx = &mockTx{}
+	return m.tx, nil
+}
+
+func (m *mockPayrollRepo) Create(ctx context.Context, tx pgx.Tx, p *model.Payroll) error {
 	m.CreateCalls++
 	m.CreatedPayroll = p
-	return m.CreateFunc(ctx, p)
+	return m.CreateFunc(ctx, tx, p)
 }
 
 // --- Test ---
@@ -104,6 +138,11 @@ func TestGeneratePayroll(t *testing.T) {
 		// benar-benar dikirim ke payrollRepo.Create, bukan cuma return value service.
 		wantCreatedKaryawanID int
 		checkCreatedArgs      bool
+
+		// task #2: verifikasi transaksi pgx eksplisit benar-benar commit saat
+		// sukses dan rollback saat Create gagal — bukan cuma compile.
+		wantCommitCalled   bool
+		wantRollbackCalled bool
 	}{
 		{
 			name:                  "normal case: campuran flat & persen, tunjangan & potongan",
@@ -115,6 +154,8 @@ func TestGeneratePayroll(t *testing.T) {
 			wantCreateCalled:      true,
 			checkCreatedArgs:      true,
 			wantCreatedKaryawanID: karyawanID,
+			wantCommitCalled:      true,
+			wantRollbackCalled:    false,
 		},
 		{
 			name:               "gaji_pokok nol: persen ikut jadi nol, flat tetap jalan",
@@ -124,6 +165,7 @@ func TestGeneratePayroll(t *testing.T) {
 			wantTotalPotongan:  decimal.NewFromInt(200000),  // flat tidak terpengaruh gaji_pokok
 			wantGajiBersih:     decimal.NewFromInt(-200000), // 0 + 0 - 200000
 			wantCreateCalled:   true,
+			wantCommitCalled:   true,
 		},
 		{
 			name:               "komponen kosong: gaji_bersih = gaji_pokok apa adanya",
@@ -133,6 +175,7 @@ func TestGeneratePayroll(t *testing.T) {
 			wantTotalPotongan:  decimal.Zero,
 			wantGajiBersih:     decimal.NewFromInt(3000000),
 			wantCreateCalled:   true,
+			wantCommitCalled:   true,
 		},
 		{
 			name:               "is_persen true murni: hanya tunjangan persen (10%)",
@@ -142,13 +185,10 @@ func TestGeneratePayroll(t *testing.T) {
 			wantTotalPotongan:  decimal.Zero,
 			wantGajiBersih:     decimal.NewFromInt(1100000),
 			wantCreateCalled:   true,
+			wantCommitCalled:   true,
 		},
 		{
-			// Gap #1: nominal 0% pada is_persen=true. Beda dari kasus 10% di atas —
-			// ini menguji bahwa kontribusi komponen benar-benar 0, bukan sekadar
-			// "ada komponen persen yang diproses". Berguna menangkap bug semacam
-			// pembagian tak terduga saat konversi persen ke desimal (Nominal/100)
-			// ketika Nominal itu sendiri adalah decimal.Zero.
+			// Gap #1: nominal 0% pada is_persen=true.
 			name:               "is_persen true dengan nominal 0%: kontribusi harus nol, bukan galat",
 			karyawan:           &model.Karyawan{ID: karyawanID, GajiPokok: decimal.NewFromInt(1000000)},
 			komponenList:       []model.KomponenGaji{tunjanganPersenNol},
@@ -156,6 +196,7 @@ func TestGeneratePayroll(t *testing.T) {
 			wantTotalPotongan:  decimal.Zero,
 			wantGajiBersih:     decimal.NewFromInt(1000000),
 			wantCreateCalled:   true,
+			wantCommitCalled:   true,
 		},
 		{
 			name:             "karyawan tidak ditemukan: harus short-circuit, Create tidak dipanggil",
@@ -164,10 +205,7 @@ func TestGeneratePayroll(t *testing.T) {
 			wantCreateCalled: false,
 		},
 		{
-			// Gap #2: repository komponen_gaji gagal (bukan "not found", tapi infra
-			// error/timeout). Service harus propagate error ini dan TIDAK lanjut
-			// memanggil payrollRepo.Create dengan data tunjangan/potongan yang
-			// belum lengkap/salah.
+			// Gap #2: repository komponen_gaji gagal.
 			name:             "komponenRepo gagal: harus short-circuit, Create tidak dipanggil",
 			karyawan:         &model.Karyawan{ID: karyawanID, GajiPokok: decimal.NewFromInt(5000000)},
 			komponenErr:      errKomponenRepoGagal,
@@ -175,12 +213,14 @@ func TestGeneratePayroll(t *testing.T) {
 			wantCreateCalled: false,
 		},
 		{
-			name:             "payroll sudah pernah digenerate untuk periode ini",
-			karyawan:         &model.Karyawan{ID: karyawanID, GajiPokok: decimal.NewFromInt(4000000)},
-			komponenList:     []model.KomponenGaji{},
-			createErr:        repository.ErrPayrollAlreadyExists,
-			wantErr:          repository.ErrPayrollAlreadyExists,
-			wantCreateCalled: true,
+			name:               "payroll sudah pernah digenerate untuk periode ini",
+			karyawan:           &model.Karyawan{ID: karyawanID, GajiPokok: decimal.NewFromInt(4000000)},
+			komponenList:       []model.KomponenGaji{},
+			createErr:          repository.ErrPayrollAlreadyExists,
+			wantErr:            repository.ErrPayrollAlreadyExists,
+			wantCreateCalled:   true,
+			wantCommitCalled:   false,
+			wantRollbackCalled: true,
 		},
 	}
 
@@ -197,7 +237,7 @@ func TestGeneratePayroll(t *testing.T) {
 				},
 			}
 			payrollRepo := &mockPayrollRepo{
-				CreateFunc: func(ctx context.Context, p *model.Payroll) error {
+				CreateFunc: func(ctx context.Context, tx pgx.Tx, p *model.Payroll) error {
 					return tt.createErr
 				},
 			}
@@ -232,8 +272,7 @@ func TestGeneratePayroll(t *testing.T) {
 				t.Errorf("Create called = %v, want %v", createCalled, tt.wantCreateCalled)
 			}
 
-			// Gap #3: return value service benar tidak menjamin argumen ke
-			// repository benar — verifikasi objek yang benar-benar dikirim ke Create.
+			// Gap #3: verifikasi argumen yang benar-benar dikirim ke Create.
 			if tt.checkCreatedArgs {
 				if payrollRepo.CreatedPayroll == nil {
 					t.Fatalf("checkCreatedArgs=true tapi payrollRepo.CreatedPayroll nil (Create tidak pernah dipanggil?)")
@@ -247,6 +286,29 @@ func TestGeneratePayroll(t *testing.T) {
 						payrollRepo.CreatedPayroll.Periode, periode)
 				}
 			}
+
+			// Task #2: verifikasi transaksi pgx benar-benar di-commit saat sukses,
+			// di-rollback saat Create gagal. Kalau BeginTx tidak pernah dipanggil
+			// (mis. karyawan/komponen error, short-circuit sebelum tx dibuka),
+			// payrollRepo.tx tetap nil — wajar, bukan bug.
+			if payrollRepo.tx != nil {
+				if payrollRepo.tx.CommitCalls != boolToInt(tt.wantCommitCalled) {
+					t.Errorf("Commit calls = %d, want %d", payrollRepo.tx.CommitCalls, boolToInt(tt.wantCommitCalled))
+				}
+				if payrollRepo.tx.RollbackCalls != boolToInt(tt.wantRollbackCalled) {
+					t.Errorf("Rollback calls = %d, want %d", payrollRepo.tx.RollbackCalls, boolToInt(tt.wantRollbackCalled))
+				}
+			} else if tt.wantCommitCalled || tt.wantRollbackCalled {
+				t.Errorf("tx tidak pernah dibuka (BeginTx tidak dipanggil), padahal wantCommitCalled=%v wantRollbackCalled=%v",
+					tt.wantCommitCalled, tt.wantRollbackCalled)
+			}
 		})
 	}
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }

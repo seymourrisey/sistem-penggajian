@@ -5,19 +5,28 @@ import (
 	"errors"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/seymourrisey/sistem-penggajian/internal/model"
 )
 
-var ErrPayrollNotFound = errors.New("payroll tidak ditemukan!")
 var ErrPayrollAlreadyExists = errors.New("payroll sudah ada untuk karyawan dan periode ini!")
 
 // PayrollRepository mendefinisikan operasi akses data untuk tabel payroll,
 // termasuk query gabungan untuk riwayat dan laporan agregat (F5, F6).
 type PayrollRepository interface {
-	Create(ctx context.Context, p *model.Payroll) error
+	// BeginTx membuka transaksi pgx baru. Caller (service layer)
+	// bertanggung jawab memanggil tx.Commit(ctx) atau tx.Rollback(ctx).
+	BeginTx(ctx context.Context) (pgx.Tx, error)
+
+	// Create menyisipkan record payroll baru di dalam transaksi tx yang
+	// sudah dibuka lewat BeginTx. Tidak melakukan commit/rollback sendiri —
+	// itu tanggung jawab caller, supaya bisa dibungkus bersama operasi
+	// kritis lain di masa depan tanpa mengubah signature ini lagi.
+	Create(ctx context.Context, tx pgx.Tx, p *model.Payroll) error
+
 	GetRiwayatByKaryawanID(ctx context.Context, karyawanID int) ([]model.PayrollRiwayat, error)
 	GetLaporanAgregat(ctx context.Context, periode time.Time) ([]model.LaporanDepartemen, error)
 }
@@ -30,17 +39,27 @@ func NewPayrollRepository(db *pgxpool.Pool) PayrollRepository {
 	return &payrollRepository{db: db}
 }
 
-// Create menyisipkan record payroll baru dan mengisi field ID & CreatedAt
-// hasil generate PostgreSQL ke struct p. Jika kombinasi karyawan_id+periode
-// sudah ada (pelanggaran constraint unik), mengembalikan
+// BeginTx membuka transaksi pgx baru dari pool. Dipanggil dari service layer
+// sebelum operasi write kritis (mis. GeneratePayroll) — bukti KUK unit #2
+// "transaksi eksplisit (COMMIT/ROLLBACK) untuk operasi kritis" (NF5).
+func (r *payrollRepository) BeginTx(ctx context.Context) (pgx.Tx, error) {
+	return r.db.Begin(ctx)
+}
+
+// Create menyisipkan record payroll baru di dalam transaksi tx dan mengisi
+// field ID & CreatedAt hasil generate PostgreSQL ke struct p. Jika kombinasi
+// karyawan_id+periode sudah ada (pelanggaran constraint unik), mengembalikan
 // ErrPayrollAlreadyExists alih-alih error pgx mentah.
-func (r *payrollRepository) Create(ctx context.Context, p *model.Payroll) error {
+//
+// CATATAN: dieksekusi lewat tx (bukan r.db) — caller wajib Commit/Rollback
+// tx tersebut sendiri, function ini tidak melakukannya.
+func (r *payrollRepository) Create(ctx context.Context, tx pgx.Tx, p *model.Payroll) error {
 	query := `
 		INSERT INTO payroll (karyawan_id, periode, gaji_pokok, total_tunjangan, total_potongan, gaji_bersih, status)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id, created_at`
 
-	err := r.db.QueryRow(ctx, query,
+	err := tx.QueryRow(ctx, query,
 		p.KaryawanID, p.Periode, p.GajiPokok, p.TotalTunjangan, p.TotalPotongan, p.GajiBersih, p.Status,
 	).Scan(&p.ID, &p.CreatedAt)
 	if err != nil {

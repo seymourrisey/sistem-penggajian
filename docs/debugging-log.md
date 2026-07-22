@@ -417,15 +417,50 @@ Response bersih, satu JSON object tunggal, tidak ada lagi warning "headers alrea
 ## Bug #10 — Response JSON Tanggal Menggunakan RFC3339, Tidak Sesuai API Contract
 
 **Endpoint:** 
-- POST /api/payroll/generate
-- GET /api/payroll/:karyawan_id/riwayat
-- GET /api/payroll/laporan
-- POST /api/karyawan
-- GET /api/karyawan
-- GET /api/karyawan/:id
-- PUT /api/karyawan/:id
+- `POST /api/payroll/generate`
+- `GET /api/payroll/:karyawan_id/riwayat`
+- `GET /api/payroll/laporan`
+- `POST /api/karyawan`
+- `GET /api/karyawan`
+- `GET /api/karyawan/:id`
+- `PUT /api/karyawan/:id`
 
 **Severity:** Medium
+
+### Langkah Reproduksi
+
+Lakukan request ke endpoint payroll atau karyawan, kemudian perhatikan
+field `periode` atau `tanggal_masuk` pada response.
+
+### Before
+
+``` json
+{"periode":"2026-07-20T00:00:00Z","tanggal_masuk":"2024-03-01T00:00:00Z"}
+```
+
+### Root Cause
+
+Field bertipe `time.Time` dikirim langsung menggunakan `c.JSON(...)`.
+Library `encoding/json` memanggil `time.Time.MarshalJSON()` sehingga
+otomatis menghasilkan format RFC3339, bukan `YYYY-MM-DD` seperti yang
+ditetapkan pada API Contract.
+
+### Fix (After)
+
+Ditambahkan DTO (`karyawanResponse`, `payrollResponse`,
+`riwayatResponse`, dan `laporanResponse`) pada layer handler. Seluruh
+field tanggal diformat menggunakan `Format(dateOnlyLayout)` sebelum
+dikirim ke client. Model domain tetap menggunakan `time.Time` sehingga
+repository dan database tidak berubah.
+
+### Verifikasi
+
+``` json
+{"periode":"2026-07-20","tanggal_masuk":"2024-03-01"}
+```
+
+Seluruh endpoint terkait diuji ulang melalui Postman dan kini konsisten
+menggunakan format `YYYY-MM-DD`.
 
 
 
@@ -444,5 +479,6 @@ Response bersih, satu JSON object tunggal, tidak ada lagi warning "headers alrea
 | 7 | Error duplikat saat update bocor mentah | Medium | ✅ Fixed & Verified |
 | 8 | IDOR — update komponen gaji lintas karyawan | High | ✅ Fixed & Verified |
 | 9 | Double response write pada PUT departemen | Medium | ✅ Fixed & Verified |
+| 10 | Response JSON Tanggal Menggunakan RFC3339, Tidak Sesuai API Contract | Medium | ✅ Fixed & Verified |
 
 Seluruh kasus ditemukan melalui exploratory testing manual (Postman), bukan simulasi/hipotesis — setiap "Before" adalah response aktual yang tercatat, dan setiap "Verifikasi" adalah hasil retest aktual setelah fix diterapkan.
