@@ -2,7 +2,7 @@
 
 **Bukti Kompetensi:** #6 — Melakukan Debugging
 **Metode:** Exploratory testing manual via Postman terhadap seluruh endpoint REST API, dilakukan setelah handler + router + wiring selesai
-**Total kasus:** 10 bug ditemukan, 10 bug diperbaiki dan diverifikasi ulang.
+**Total kasus:** 11 bug ditemukan, 11 bug diperbaiki dan diverifikasi ulang.
 
 ---
 
@@ -537,5 +537,6 @@ ok  	github.com/seymourrisey/sistem-penggajian/tests/unit
 | 8 | IDOR — update komponen gaji lintas karyawan | High | ✅ Fixed & Verified |
 | 9 | Double response write pada PUT departemen | Medium | ✅ Fixed & Verified |
 | 10 | Response JSON Tanggal Menggunakan RFC3339, Tidak Sesuai API Contract | Medium | ✅ Fixed & Verified |
+| 11 | Mock PayrollRepository Tidak Sinkron Setelah Interface Berubah (Transaksi pgx) | Medium | ✅ Fixed & Verified |
 
 Seluruh kasus ditemukan melalui exploratory testing manual (Postman), bukan simulasi/hipotesis — setiap "Before" adalah response aktual yang tercatat, dan setiap "Verifikasi" adalah hasil retest aktual setelah fix diterapkan.
