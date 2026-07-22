@@ -462,6 +462,63 @@ repository dan database tidak berubah.
 Seluruh endpoint terkait diuji ulang melalui Postman dan kini konsisten
 menggunakan format `YYYY-MM-DD`.
 
+---
+
+## Bug #11 — Mock PayrollRepository Tidak Sinkron Setelah Interface Berubah (Transaksi pgx)
+
+**Endpoint terdampak:** Tidak ada endpoint HTTP langsung — ini compile-time failure di `tests/unit/payroll_service_test.go`, dipicu oleh perubahan signature interface `PayrollRepository.Create` saat menambahkan transaksi pgx eksplisit di `GeneratePayroll`.
+**Severity:** Medium — tidak berdampak ke runtime/production, tapi memblokir seluruh test suite unit (build failed, 0 test bisa jalan).
+
+### Langkah Reproduksi
+```go
+go test ./tests/unit/... -v
+```
+(dijalankan setelah `PayrollRepository.Create` diubah untuk menerima parameter `tx pgx.Tx`, sebagai bagian dari pembungkusan `GeneratePayroll` dalam transaksi pgx eksplisit — BeginTx → Create → Commit/Rollback)
+
+### Before
+```log
+tests\unit\payroll_service_test.go:205:65: cannot use payrollRepo (variable of type *mockPayrollRepo)
+as repository.PayrollRepository value in argument to service.NewPayrollService: *mockPayrollRepo does
+not implement repository.PayrollRepository (wrong type for method Create)
+have Create(context.Context, *model.Payroll) error
+want Create(context.Context, pgx.Tx, *model.Payroll) error
+FAIL github.com/seymourrisey/sistem-penggajian/tests/unit [build failed]
+```
+
+### Root Cause
+`mockPayrollRepo` di test file meng-implement signature lama `Create(ctx, p)`. Perubahan interface `PayrollRepository` (menambah `BeginTx`, mengubah `Create` untuk menerima `tx pgx.Tx`) adalah breaking change yang tidak otomatis terpropagasi ke mock — Go memaksa mock satisfy interface baru secara eksplisit, jadi test package gagal compile total sebelum satu pun test case sempat jalan.
+
+### Fix (After)
+- Tambah `mockTx` (embed `pgx.Tx` nil, override `Commit`/`Rollback`) untuk mensimulasikan transaksi.
+- Update `mockPayrollRepo`: implement `BeginTx` (return `mockTx` baru), ubah `Create` untuk menerima parameter `tx pgx.Tx`.
+- **Tambahan di luar sekadar fix compile**: masukkan field `wantCommitCalled`/`wantRollbackCalled` di tiap test case untuk verifikasi eksplisit bahwa `Commit()` dipanggil saat sukses dan `Rollback()` dipanggil saat `Create` gagal — sebelumnya tidak ada test yang membuktikan perilaku transaksi ini sama sekali.
+
+### Verifikasi
+```go
+go test ./tests/unit/... -v
+```
+```log
+=== RUN   TestGeneratePayroll
+=== RUN   TestGeneratePayroll/normal_case:_campuran_flat_&_persen,_tunjangan_&_potongan
+=== RUN   TestGeneratePayroll/gaji_pokok_nol:_persen_ikut_jadi_nol,_flat_tetap_jalan
+=== RUN   TestGeneratePayroll/komponen_kosong:_gaji_bersih_=_gaji_pokok_apa_adanya
+=== RUN   TestGeneratePayroll/is_persen_true_murni:_hanya_tunjangan_persen_(10%)
+=== RUN   TestGeneratePayroll/is_persen_true_dengan_nominal_0%:_kontribusi_harus_nol,_bukan_galat
+=== RUN   TestGeneratePayroll/karyawan_tidak_ditemukan:_harus_short-circuit,_Create_tidak_dipanggil
+=== RUN   TestGeneratePayroll/komponenRepo_gagal:_harus_short-circuit,_Create_tidak_dipanggil
+=== RUN   TestGeneratePayroll/payroll_sudah_pernah_digenerate_untuk_periode_ini
+--- PASS: TestGeneratePayroll (0.00s)
+    --- PASS: TestGeneratePayroll/normal_case:_campuran_flat_&_persen,_tunjangan_&_potongan (0.00s)
+    --- PASS: TestGeneratePayroll/gaji_pokok_nol:_persen_ikut_jadi_nol,_flat_tetap_jalan (0.00s)
+    --- PASS: TestGeneratePayroll/komponen_kosong:_gaji_bersih_=_gaji_pokok_apa_adanya (0.00s)
+    --- PASS: TestGeneratePayroll/is_persen_true_murni:_hanya_tunjangan_persen_(10%) (0.00s)
+    --- PASS: TestGeneratePayroll/is_persen_true_dengan_nominal_0%:_kontribusi_harus_nol,_bukan_galat (0.00s)
+    --- PASS: TestGeneratePayroll/karyawan_tidak_ditemukan:_harus_short-circuit,_Create_tidak_dipanggil (0.00s)
+    --- PASS: TestGeneratePayroll/komponenRepo_gagal:_harus_short-circuit,_Create_tidak_dipanggil (0.00s)
+    --- PASS: TestGeneratePayroll/payroll_sudah_pernah_digenerate_untuk_periode_ini (0.00s)
+PASS
+ok  	github.com/seymourrisey/sistem-penggajian/tests/unit
+```
 
 
 ---

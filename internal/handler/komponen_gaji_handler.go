@@ -11,6 +11,7 @@ import (
 	"github.com/seymourrisey/sistem-penggajian/internal/model"
 	"github.com/seymourrisey/sistem-penggajian/internal/repository"
 	"github.com/seymourrisey/sistem-penggajian/internal/service"
+	"github.com/seymourrisey/sistem-penggajian/internal/util"
 )
 
 type KomponenGajiHandler struct {
@@ -119,6 +120,10 @@ func (h *KomponenGajiHandler) GetByKaryawanID(c *gin.Context) {
 		mapKomponenGajiError(c, err)
 		return
 	}
+
+	// F7: diurutkan berdasarkan nominal terbesar menggunakan algoritma
+	// sorting manual (bukan ORDER BY SQL)
+	util.SortKomponenGajiByNominalDesc(komponenGaji)
 
 	c.JSON(http.StatusOK, komponenGaji)
 }
