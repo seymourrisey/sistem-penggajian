@@ -10,10 +10,17 @@ import (
 type StatusKaryawan string
 
 const (
-	StatusKaryawanAktif    StatusKaryawan = "aktif"
+	// StatusKaryawanAktif menandakan karyawan masih aktif bekerja.
+	StatusKaryawanAktif StatusKaryawan = "aktif"
+	// StatusKaryawanNonaktif menandakan karyawan sudah dinonaktifkan lewat
+	// soft-delete (KaryawanRepository.SoftDelete) — baris data tetap
+	// tersimpan untuk menjaga audit trail riwayat payroll.
 	StatusKaryawanNonaktif StatusKaryawan = "nonaktif"
 )
 
+// Karyawan merepresentasikan satu baris pada tabel karyawan. Field Status
+// sengaja hanya boleh berubah lewat jalur SoftDelete (state transition),
+// bukan lewat Update data biasa (nip/nama/jabatan/gaji_pokok)
 type Karyawan struct {
 	ID           int             `json:"id" db:"id"`
 	NIP          string          `json:"nip" db:"nip"`

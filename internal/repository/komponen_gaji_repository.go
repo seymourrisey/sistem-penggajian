@@ -12,10 +12,25 @@ import (
 	"github.com/seymourrisey/sistem-penggajian/internal/model"
 )
 
+// ErrKomponenGajiNotFound dikembalikan ketika komponen_gaji dengan ID
+// tertentu tidak ditemukan.
 var ErrKomponenGajiNotFound = errors.New("komponen gaji tidak ditemukan")
+
+// ErrKaryawanTidakValid dikembalikan ketika karyawan_id yang dirujuk tidak
+// ada (mapping dari pelanggaran FK constraint
+// komponen_gaji.karyawan_id -> karyawan.id).
 var ErrKaryawanTidakValid = errors.New("karyawan_id tidak valid atau tidak ditemukan")
+
+// ErrKomponenGajiDuplikat dikembalikan ketika kombinasi karyawan_id, jenis,
+// dan nama sudah ada (mapping dari pelanggaran UNIQUE constraint
+// uq_komponen_gaji_karyawan_jenis_nama).
 var ErrKomponenGajiDuplikat = errors.New("komponen gaji dengan jenis dan nama ini sudah ada untuk karyawan tersebut")
 
+// KomponenGajiRepository mendefinisikan kontrak akses data untuk entitas
+// KomponenGaji. Sengaja tidak menyediakan Delete — komponen gaji yang sudah
+// pernah dipakai dalam generate payroll historis dikoreksi lewat Update
+// (mis. HR salah input nominal/persentase), bukan dihapus, untuk menjaga
+// jejak data tetap dapat ditelusuri.
 type KomponenGajiRepository interface {
 	Create(ctx context.Context, k *model.KomponenGaji) error
 	GetByID(ctx context.Context, id int) (*model.KomponenGaji, error)
@@ -24,10 +39,13 @@ type KomponenGajiRepository interface {
 	// Delete(ctx context.Context, id int) error
 }
 
+// komponenGajiRepository adalah implementasi KomponenGajiRepository
+// menggunakan pgx pool.
 type komponenGajiRepository struct {
 	db *pgxpool.Pool
 }
 
+// NewKomponenGajiRepository membuat instance baru KomponenGajiRepository.
 func NewKomponenGajiRepository(db *pgxpool.Pool) KomponenGajiRepository {
 	return &komponenGajiRepository{db: db}
 }

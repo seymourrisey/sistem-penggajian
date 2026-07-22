@@ -8,6 +8,9 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// Config menyimpan seluruh nilai konfigurasi aplikasi yang dibaca dari
+// environment variable (lewat file .env atau environment asli), meliputi
+// kredensial koneksi database dan port HTTP server.
 type Config struct {
 	DBHost     string
 	DBPort     string
@@ -32,6 +35,10 @@ func (c *Config) DSN() string {
 	)
 }
 
+// LoadConfig membaca file .env (jika ada) lalu memuat seluruh environment
+// variable yang dibutuhkan aplikasi ke dalam Config. DB_USER dan DB_NAME
+// wajib diisi — jika salah satu kosong, LoadConfig mengembalikan error
+// alih-alih Config dengan nilai default yang tidak aman dipakai.
 func LoadConfig() (*Config, error) {
 	if err := godotenv.Load(); err != nil {
 		log.Println("INFO: file.env tidak ditemukan!!")

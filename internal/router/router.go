@@ -6,6 +6,9 @@ import (
 	"github.com/seymourrisey/sistem-penggajian/internal/handler"
 )
 
+// NewRouter membuat *gin.Engine yang sudah terdaftar seluruh route API
+// (departemen, karyawan, komponen-gaji, payroll) di bawah group "/api",
+// sesuai daftar endpoint pada ProjectDesign section 4.
 func NewRouter(
 	departemenHandler *handler.DepartemenHandler,
 	karyawanHandler *handler.KaryawanHandler,

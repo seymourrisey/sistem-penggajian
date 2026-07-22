@@ -12,6 +12,9 @@ import (
 	"github.com/seymourrisey/sistem-penggajian/internal/model"
 )
 
+// ErrPayrollAlreadyExists dikembalikan ketika payroll untuk kombinasi
+// karyawan_id dan periode yang sama sudah pernah digenerate (mapping dari
+// pelanggaran UNIQUE constraint payroll(karyawan_id, periode)).
 var ErrPayrollAlreadyExists = errors.New("payroll sudah ada untuk karyawan dan periode ini!")
 
 // PayrollRepository mendefinisikan operasi akses data untuk tabel payroll,
@@ -31,10 +34,12 @@ type PayrollRepository interface {
 	GetLaporanAgregat(ctx context.Context, periode time.Time) ([]model.LaporanDepartemen, error)
 }
 
+// payrollRepository adalah implementasi PayrollRepository menggunakan pgx pool.
 type payrollRepository struct {
 	db *pgxpool.Pool
 }
 
+// NewPayrollRepository membuat instance baru PayrollRepository.
 func NewPayrollRepository(db *pgxpool.Pool) PayrollRepository {
 	return &payrollRepository{db: db}
 }

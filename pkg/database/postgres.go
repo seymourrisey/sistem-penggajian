@@ -9,6 +9,12 @@ import (
 	"github.com/seymourrisey/sistem-penggajian/internal/config"
 )
 
+// NewPool membuat dan memverifikasi koneksi pgxpool.Pool baru berdasarkan
+// Config yang diberikan. Pool dikonfigurasi dengan MaxConns=10, MinConns=2,
+// MaxConnLifetime 1 jam, dan MaxConnIdleTime 30 menit — persiapan langsung
+// untuk skalabilitas koneksi (lihat ProjectDesign NF2). Melakukan Ping
+// setelah pool dibuat untuk memastikan koneksi benar-benar berhasil,
+// bukan hanya berhasil di-parse.
 func NewPool(cfg *config.Config) (*pgxpool.Pool, error) {
 	poolCfg, err := pgxpool.ParseConfig(cfg.DSN())
 	if err != nil {

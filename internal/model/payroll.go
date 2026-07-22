@@ -6,13 +6,22 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// StatusPayroll merepresentasikan nilai kolom status pada tabel payroll.
 type StatusPayroll string
 
 const (
+	// StatusPayrollDraft adalah status default saat payroll baru digenerate
+	// lewat PayrollService.GeneratePayroll.
 	StatusPayrollDraft StatusPayroll = "draft"
+	// StatusPayrollFinal menandakan payroll sudah difinalisasi.
 	StatusPayrollFinal StatusPayroll = "final"
 )
 
+// Payroll merepresentasikan satu baris pada tabel payroll — snapshot hasil
+// generate slip gaji satu karyawan untuk satu periode. Nilai GajiPokok,
+// TotalTunjangan, TotalPotongan, dan GajiBersih disimpan sebagai snapshot
+// (bukan hanya foreign key ke karyawan), supaya perubahan gaji_pokok bulan
+// berjalan tidak ikut mengubah riwayat bulan-bulan sebelumnya.
 type Payroll struct {
 	ID             int             `json:"id" db:"id"`
 	KaryawanID     int             `json:"karyawan_id" db:"karyawan_id"`

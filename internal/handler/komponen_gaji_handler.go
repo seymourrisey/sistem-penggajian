@@ -14,10 +14,12 @@ import (
 	"github.com/seymourrisey/sistem-penggajian/internal/util"
 )
 
+// KomponenGajiHandler menangani HTTP request untuk entitas KomponenGaji.
 type KomponenGajiHandler struct {
 	svc service.KomponenGajiService
 }
 
+// NewKomponenGajiHandler membuat instance KomponenGajiHandler baru.
 func NewKomponenGajiHandler(svc service.KomponenGajiService) *KomponenGajiHandler {
 	return &KomponenGajiHandler{svc: svc}
 }
