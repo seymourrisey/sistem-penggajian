@@ -136,20 +136,20 @@ func (r *karyawanRepository) GetAll(ctx context.Context, departemenID *int) ([]m
 // diperbarui ke waktu sekarang dan hasilnya di-scan kembali ke k.UpdatedAt.
 func (r *karyawanRepository) Update(ctx context.Context, k *model.Karyawan) error {
 	query := `
-		UPDATE karyawan
-		SET nip = $1,
-		    nama = $2,
-		    departemen_id = $3,
-		    jabatan = $4,
-		    gaji_pokok = $5,
-		    tanggal_masuk = $6,
-		    updated_at = NOW()
-		WHERE id = $7
-		RETURNING updated_at
-	`
+	    UPDATE karyawan
+	    SET nip = $1,
+	        nama = $2,
+	        departemen_id = $3,
+	        jabatan = $4,
+	        gaji_pokok = $5,
+	        tanggal_masuk = $6,
+	        updated_at = NOW()
+	    WHERE id = $7
+	    RETURNING status, created_at, updated_at
+		`
 	err := r.db.QueryRow(ctx, query,
 		k.NIP, k.Nama, k.DepartemenID, k.Jabatan, k.GajiPokok, k.TanggalMasuk, k.ID,
-	).Scan(&k.UpdatedAt)
+	).Scan(&k.Status, &k.CreatedAt, &k.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrKaryawanNotFound

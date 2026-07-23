@@ -2,10 +2,6 @@ package main
 
 import (
 	"log"
-	"net/http/pprof"
-	"os"
-
-	"github.com/gin-gonic/gin"
 
 	"github.com/seymourrisey/sistem-penggajian/internal/config"
 	"github.com/seymourrisey/sistem-penggajian/internal/handler"
@@ -58,10 +54,10 @@ func main() {
 	// sengaja aktif di production. Dipakai khusus untuk sesi profiling
 	// KUK unit kompetensi #7 (docs/profiling-report.md), bukan fitur
 	// permanen aplikasi.
-	if os.Getenv("ENABLE_PPROF") == "true" {
-		registerPprofRoutes(r)
-		log.Println("pprof: endpoint /debug/pprof aktif (ENABLE_PPROF=true)")
-	}
+	// if os.Getenv("ENABLE_PPROF") == "true" {
+	// 	registerPprofRoutes(r)
+	// 	log.Println("pprof: endpoint /debug/pprof aktif (ENABLE_PPROF=true)")
+	// }
 
 	log.Printf("server berjalan di port %s", cfg.AppPort)
 	if err := r.Run(":" + cfg.AppPort); err != nil {
@@ -74,20 +70,20 @@ func main() {
 // dengan konvensi net/http/pprof default, supaya tooling standar
 // (go tool pprof http://host/debug/pprof/profile) tetap bisa dipakai
 // tanpa konfigurasi tambahan.
-func registerPprofRoutes(r *gin.Engine) {
-	debug := r.Group("/debug/pprof")
-	{
-		debug.GET("/", gin.WrapF(pprof.Index))
-		debug.GET("/cmdline", gin.WrapF(pprof.Cmdline))
-		debug.GET("/profile", gin.WrapF(pprof.Profile))
-		debug.POST("/symbol", gin.WrapF(pprof.Symbol))
-		debug.GET("/symbol", gin.WrapF(pprof.Symbol))
-		debug.GET("/trace", gin.WrapF(pprof.Trace))
-		debug.GET("/allocs", gin.WrapF(pprof.Handler("allocs").ServeHTTP))
-		debug.GET("/block", gin.WrapF(pprof.Handler("block").ServeHTTP))
-		debug.GET("/goroutine", gin.WrapF(pprof.Handler("goroutine").ServeHTTP))
-		debug.GET("/heap", gin.WrapF(pprof.Handler("heap").ServeHTTP))
-		debug.GET("/mutex", gin.WrapF(pprof.Handler("mutex").ServeHTTP))
-		debug.GET("/threadcreate", gin.WrapF(pprof.Handler("threadcreate").ServeHTTP))
-	}
-}
+// func registerPprofRoutes(r *gin.Engine) {
+// 	debug := r.Group("/debug/pprof")
+// 	{
+// 		debug.GET("/", gin.WrapF(pprof.Index))
+// 		debug.GET("/cmdline", gin.WrapF(pprof.Cmdline))
+// 		debug.GET("/profile", gin.WrapF(pprof.Profile))
+// 		debug.POST("/symbol", gin.WrapF(pprof.Symbol))
+// 		debug.GET("/symbol", gin.WrapF(pprof.Symbol))
+// 		debug.GET("/trace", gin.WrapF(pprof.Trace))
+// 		debug.GET("/allocs", gin.WrapF(pprof.Handler("allocs").ServeHTTP))
+// 		debug.GET("/block", gin.WrapF(pprof.Handler("block").ServeHTTP))
+// 		debug.GET("/goroutine", gin.WrapF(pprof.Handler("goroutine").ServeHTTP))
+// 		debug.GET("/heap", gin.WrapF(pprof.Handler("heap").ServeHTTP))
+// 		debug.GET("/mutex", gin.WrapF(pprof.Handler("mutex").ServeHTTP))
+// 		debug.GET("/threadcreate", gin.WrapF(pprof.Handler("threadcreate").ServeHTTP))
+// 	}
+// }

@@ -2,7 +2,7 @@
 
 **Bukti Kompetensi:** #6 — Melakukan Debugging
 **Metode:** Exploratory testing manual via Postman terhadap seluruh endpoint REST API, dilakukan setelah handler + router + wiring selesai
-**Total kasus:** 12 bug ditemukan, 12 bug diperbaiki dan diverifikasi ulang.
+**Total kasus:** 13 bug ditemukan, 13 bug diperbaiki dan diverifikasi ulang.
 
 ---
 
@@ -19,8 +19,8 @@ Setiap kasus dicatat dengan struktur yang sama:
 
 ## Bug #1 — Delete Departemen yang Masih Direferensikan Karyawan Menghasilkan 500, Bukan 409
 
-**Endpoint:** `DELETE /api/departemen/:id`
-**Severity:** Medium (kesalahan HTTP semantic — client error dianggap server error)
+- **Endpoint:** `DELETE /api/departemen/:id`
+- **Severity:** Medium (kesalahan HTTP semantic — client error dianggap server error)
 
 ### Langkah Reproduksi
 ```
@@ -96,8 +96,8 @@ Confirmed via Postman, log server: `[GIN] ... | 409 | ... | DELETE "/api/departe
 
 Empat kasus di bawah ini digabung karena akar masalahnya identik: seluruh handler mengirim `err.Error()` langsung dari `c.ShouldBindJSON()` ke response client tanpa translasi, sehingga pesan internal Go/library bocor ke API publik.
 
-**Endpoint terdampak:** semua endpoint yang menerima JSON body (`POST`/`PUT` di departemen, karyawan, komponen-gaji, payroll)
-**Severity:** Medium (bukan security-critical, tapi API contract rusak — pesan tidak konsisten bahasa Indonesia, membocorkan nama struct internal)
+- **Endpoint terdampak:** semua endpoint yang menerima JSON body (`POST`/`PUT` di departemen, karyawan, komponen-gaji, payroll)
+- **Severity:** Medium (bukan security-critical, tapi API contract rusak — pesan tidak konsisten bahasa Indonesia, membocorkan nama struct internal)
 
 ### Kasus #2 — Field Required Kosong (string `""`)
 
@@ -219,8 +219,8 @@ Keempat kasus dites ulang via Postman, semua konsisten bahasa Indonesia, tidak a
 
 ## Bug #6 & #7 — Duplikat Komponen Gaji Bisa Tersimpan, Error Duplikat Saat Update Bocor Mentah (2 Kasus, 1 Root Cause)
 
-**Endpoint terdampak:** `POST /api/karyawan/:id/komponen-gaji`, `PUT /api/karyawan/:id/komponen-gaji/:komponen_id`
-**Severity:** High — kasus #6 adalah data integrity issue (data invalid bisa tersimpan), bukan cuma masalah kosmetik error message.
+- **Endpoint terdampak:** `POST /api/karyawan/:id/komponen-gaji`, `PUT /api/karyawan/:id/komponen-gaji/:komponen_id`
+- **Severity:** High — kasus #6 adalah data integrity issue (data invalid bisa tersimpan), bukan cuma masalah kosmetik error message.
 
 ### Kasus #6 — Insert Duplikat Diterima Tanpa Ditolak
 
@@ -323,8 +323,8 @@ Confirmed via Postman untuk kedua endpoint (`Create` dan `Update`), tidak ada la
 
 ## Bug #8 — IDOR: Update Komponen Gaji Bisa Menembus Kepemilikan Karyawan Lain
 
-**Endpoint:** `PUT /api/karyawan/:id/komponen-gaji/:komponen_id`
-**Severity:** High — ini termasuk kategori **security flaw** (Insecure Direct Object Reference / IDOR), bukan sekadar bug fungsional.
+- **Endpoint:** `PUT /api/karyawan/:id/komponen-gaji/:komponen_id`
+- **Severity:** High — ini termasuk kategori **security flaw** (Insecure Direct Object Reference / IDOR), bukan sekadar bug fungsional.
 
 ### Langkah Reproduksi
 ```
@@ -366,8 +366,8 @@ Data milik karyawan 2 dikonfirmasi tidak berubah setelah request ini dikirim.
 
 ## Bug #9 — Response Ganda/Corrupt Saat Validasi PUT Departemen Gagal
 
-**Endpoint:** `PUT /api/departemen/:id`
-**Severity:** Medium — tidak menyebabkan data corruption, tapi API contract rusak (client menerima response tidak valid/ambigu).
+- **Endpoint:** `PUT /api/departemen/:id`
+- **Severity:** Medium — tidak menyebabkan data corruption, tapi API contract rusak (client menerima response tidak valid/ambigu).
 
 ### Langkah Reproduksi
 ```
@@ -570,6 +570,45 @@ ok  	github.com/seymourrisey/sistem-penggajian/tests/integration	1.914s [no test
 
 ---
 
+## Bug #13 — Response PUT /api/karyawan/:id Mengembalikan `status` dan `created_at` Kosong
+- **Endpoint terdampak:** `PUT /api/karyawan/:id` (`internal/handler/karyawan_handler.go`, fungsi `Update`).
+- **Severity:** Medium — tidak merusak data di database (kolom `status`/`created_at` di database tetap benar), tapi response API memberi informasi salah ke client (`status` dan `created_at` selalu zero value: `""` dan `0001-01-01T00:00:00Z`).
+### Langkah Reproduksi
+```go
+go test ./tests/integration/... -v -run TestUpdateKaryawan/status_tidak_berubah_meski_dikirim
+```
+(subtest baru yang sengaja mengirim `"status": "nonaktif"` di body PUT untuk memverifikasi business rule immutability status, lihat `ProjectDesign-SistemPenggajian.md` section 2.2)
+### Before
+```log
+karyawan_update_test.go:159: status seharusnya tetap aktif meski dikirim nonaktif di body PUT, got
+--- FAIL: TestUpdateKaryawan/status_tidak_berubah_meski_dikirim (0.00s)
+```
+### Root Cause
+Handler `Update` membangun struct `model.Karyawan` hanya dari field request (`req.NIP`, `req.Nama`, dst) sebelum memanggil `svc.Update`. Field `Status` dan `CreatedAt` tidak pernah diisi ke struct ini. Query `UPDATE` di repository sebelumnya hanya `RETURNING updated_at` (di-scan ke `k.UpdatedAt`), sehingga `k.Status` dan `k.CreatedAt` tetap zero value saat `newKaryawanResponse(k)` dipanggil di akhir handler. Bug ini murni di layer response — bukan business rule immutability status yang salah (query `UPDATE` memang sudah benar, tidak menyentuh kolom `status` sama sekali), tapi response yang dibangun dari struct request lokal alih-alih dari data aktual hasil update di database.
+### Fix (After)
+Ubah `RETURNING` di `karyawan_repository.go` fungsi `Update` untuk menyertakan `status` dan `created_at`, di-scan langsung ke `k.Status` dan `k.CreatedAt`:
+```go
+RETURNING status, created_at, updated_at
+```
+```go
+.Scan(&k.Status, &k.CreatedAt, &k.UpdatedAt)
+```
+Tidak ada query tambahan (masih 1 round-trip), tidak ada perubahan di `service`/`handler`.
+### Verifikasi
+```go
+go test ./tests/integration/... -v -run TestUpdateKaryawan
+```
+```log
+--- PASS: TestUpdateKaryawan (0.01s)
+    --- PASS: TestUpdateKaryawan/sukses_200 (0.01s)
+    --- PASS: TestUpdateKaryawan/tidak_ditemukan_404 (0.00s)
+    --- PASS: TestUpdateKaryawan/validasi_gagal_400_nip_kosong (0.00s)
+    --- PASS: TestUpdateKaryawan/status_tidak_berubah_meski_dikirim (0.00s)
+PASS
+```
+
+---
+
 ## Ringkasan
 
 | # | Bug | Severity | Status |
@@ -586,5 +625,6 @@ ok  	github.com/seymourrisey/sistem-penggajian/tests/integration	1.914s [no test
 | 10 | Response JSON Tanggal Menggunakan RFC3339, Tidak Sesuai API Contract | Medium | ✅ Fixed & Verified |
 | 11 | Mock PayrollRepository Tidak Sinkron Setelah Interface Berubah (Transaksi pgx) | Medium | ✅ Fixed & Verified |
 | 12 | TRUNCATE ... RESTART IDENTITY Gagal karena Privilege Ownership Sequence | Medium | ✅ Fixed & Verified |
+| 13 | Response PUT /api/karyawan/:id Mengembalikan `status` dan `created_at` Kosong | Medium | ✅ Fixed & Verified |
 
 Seluruh kasus ditemukan melalui exploratory testing manual (Postman), bukan simulasi/hipotesis, setiap "Before" adalah response aktual yang tercatat, dan setiap "Verifikasi" adalah hasil retest aktual setelah fix diterapkan.
