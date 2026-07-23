@@ -40,8 +40,14 @@ func (c *Config) DSN() string {
 // wajib diisi — jika salah satu kosong, LoadConfig mengembalikan error
 // alih-alih Config dengan nilai default yang tidak aman dipakai.
 func LoadConfig() (*Config, error) {
-	if err := godotenv.Load(); err != nil {
-		log.Println("INFO: file.env tidak ditemukan!!")
+	envFile := os.Getenv("ENV_FILE")
+
+	if envFile == "" {
+		envFile = ".env"
+	}
+
+	if err := godotenv.Load(envFile); err != nil {
+		log.Printf("INFO: file %s tidak ditemukan\n", envFile)
 	}
 
 	cfg := &Config{

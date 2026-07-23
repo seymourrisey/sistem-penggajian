@@ -53,6 +53,7 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO payroll_app;
 -- superuser.
 GRANT EXECUTE ON FUNCTION fn_hitung_gaji_bersih(NUMERIC, NUMERIC, NUMERIC) TO payroll_app;
 GRANT EXECUTE ON PROCEDURE sp_generate_payroll_snapshot(INT, DATE) TO payroll_app;
+GRANT SELECT ON v_laporan_gaji_departemen TO payroll_app;
 
 -- ============================================================
 -- Verifikasi cepat (jalankan manual setelah user dibuat)

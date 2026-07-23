@@ -58,6 +58,13 @@ func (r *payrollRepository) BeginTx(ctx context.Context) (pgx.Tx, error) {
 //
 // CATATAN: dieksekusi lewat tx (bukan r.db) — caller wajib Commit/Rollback
 // tx tersebut sendiri, function ini tidak melakukannya.
+//
+// Repository hanya melakukan persistence payroll.
+// Seluruh perhitungan payroll telah selesai di service.
+// Repository tidak menggunakan stored procedure SQL Native;
+// procedure sp_generate_payroll_snapshot hanya disediakan
+// sebagai artefak demonstrasi SQL Native dan tidak menjadi
+// jalur eksekusi aplikasi.
 func (r *payrollRepository) Create(ctx context.Context, tx pgx.Tx, p *model.Payroll) error {
 	query := `
 		INSERT INTO payroll (karyawan_id, periode, gaji_pokok, total_tunjangan, total_potongan, gaji_bersih, status)

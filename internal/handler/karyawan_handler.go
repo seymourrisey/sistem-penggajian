@@ -48,6 +48,7 @@ type karyawanUpdateRequest struct {
 	TanggalMasuk string          `json:"tanggal_masuk" binding:"required"`
 }
 
+// karyawanResponse merepresentasikan body JSON untuk GET /api/karyawan/:id.
 type karyawanResponse struct {
 	ID           int                  `json:"id" db:"id"`
 	NIP          string               `json:"nip" db:"nip"`
@@ -61,6 +62,8 @@ type karyawanResponse struct {
 	UpdatedAt    time.Time            `json:"updated_at" db:"updated_at"`
 }
 
+// newKaryawanResponse mengembalikan karyawanResponse dari model.Karyawan.
+// TanggalMasuk di-format sebagai string dalam format YYYY-MM-DD.
 func newKaryawanResponse(k *model.Karyawan) karyawanResponse {
 	return karyawanResponse{
 		ID:           k.ID,
@@ -76,6 +79,8 @@ func newKaryawanResponse(k *model.Karyawan) karyawanResponse {
 	}
 }
 
+// listKaryawanResponse mengembalikan slice dari karyawanResponse dari slice model.Karyawan.
+// TanggalMasuk di-format sebagai string dalam format YYYY-MM-DD.
 func listKaryawanResponse(list []model.Karyawan) []karyawanResponse {
 	resp := make([]karyawanResponse, 0, len(list))
 	for _, k := range list {

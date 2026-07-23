@@ -2,7 +2,7 @@
 
 **Bukti Kompetensi:** #6 — Melakukan Debugging
 **Metode:** Exploratory testing manual via Postman terhadap seluruh endpoint REST API, dilakukan setelah handler + router + wiring selesai
-**Total kasus:** 11 bug ditemukan, 11 bug diperbaiki dan diverifikasi ulang.
+**Total kasus:** 12 bug ditemukan, 12 bug diperbaiki dan diverifikasi ulang.
 
 ---
 
@@ -520,6 +520,53 @@ PASS
 ok  	github.com/seymourrisey/sistem-penggajian/tests/unit
 ```
 
+---
+
+## Bug #12 — TRUNCATE ... RESTART IDENTITY Gagal karena Privilege Ownership Sequence
+
+**Endpoint terdampak:** Tidak ada endpoint HTTP langsung — ini kegagalan setup di `TestMain` (`tests/integration/karyawan_api_test.go`), dipicu oleh statement `TRUNCATE ... RESTART IDENTITY CASCADE` yang dijalankan sebagai user `payroll_test_app` untuk membersihkan state database sebelum tiap integration test run.
+
+**Severity:** Medium — tidak berdampak ke runtime/production, tapi memblokir seluruh integration test suite (TestMain gagal di tahap setup sebelum satu pun test case sempat jalan).
+
+### Langkah Reproduksi
+
+```go
+go test ./tests/integration/... -v
+```
+
+(dijalankan setelah `TestMain` menambahkan statement `TRUNCATE departemen, karyawan, komponen_gaji, payroll RESTART IDENTITY CASCADE` menggunakan koneksi `payroll_test_app`, sebagai bagian dari strategi reset state test database — opsi truncate-sekali-di-awal yang dipilih untuk menjaga predictability antar test run)
+
+### Before
+
+```log
+integration test: terkoneksi ke payroll_test_db, mulai menjalankan test...
+2026/07/22 19:57:26 integration test: gagal truncate tabel sebelum test run: ERROR: must be owner of sequence departemen_id_seq (SQLSTATE 42501)
+FAIL	github.com/seymourrisey/sistem-penggajian/tests/integration	1.831s
+FAIL
+```
+
+### Root Cause
+
+`RESTART IDENTITY` pada `TRUNCATE` mensyaratkan role yang menjalankannya memiliki **ownership** atas sequence terkait (`departemen_id_seq`, dst), bukan sekadar privilege DML biasa (`SELECT`/`INSERT`/`UPDATE`/`DELETE`/`TRUNCATE` yang sudah di-`GRANT` ke `payroll_test_app`). Sequence-sequence ini masih dimiliki role yang menjalankan migration (superuser), bukan `payroll_test_app`. PostgreSQL tidak menyediakan level `GRANT` granular untuk "boleh restart sequence" tanpa ownership penuh — satu-satunya fix langsung adalah `ALTER SEQUENCE ... OWNER TO payroll_test_app`, tapi itu memberi `payroll_test_app` hak `ALTER`/`DROP` atas sequence, privilege lebih tinggi dari yang dibutuhkan user aplikasi test (bertentangan dengan prinsip least privilege / NF5).
+
+### Fix (After)
+
+- Hilangkan `RESTART IDENTITY` dari statement truncate — cukup `TRUNCATE departemen, karyawan, komponen_gaji, payroll CASCADE`, tidak menyentuh sequence sama sekali sehingga tidak butuh ownership tambahan.
+- Konsekuensi: nilai `id` hasil `INSERT` tidak lagi predictable (1, 2, ...) karena sequence terus naik antar test run. Sebagai gantinya, seluruh `INSERT` di test (termasuk seed dependency `departemen` di `TestMain`) **wajib** mengambil id lewat `RETURNING id`, disimpan ke variabel (mis. `seedDepartemenITID`), bukan pernah di-hardcode.
+- Privilege `payroll_test_app` tetap terbatas pada DML + TRUNCATE tabel, tanpa ownership sequence apa pun — konsisten dengan setup privilege user test yang dibuat mirip `payroll_app` production.
+
+### Verifikasi
+
+```go
+go test ./tests/integration/... -v
+```
+
+```log
+integration test: terkoneksi ke payroll_test_db, mulai menjalankan test...
+testing: warning: no tests to run
+PASS
+ok  	github.com/seymourrisey/sistem-penggajian/tests/integration	1.914s [no tests to run]
+```
 
 ---
 
@@ -538,5 +585,6 @@ ok  	github.com/seymourrisey/sistem-penggajian/tests/unit
 | 9 | Double response write pada PUT departemen | Medium | ✅ Fixed & Verified |
 | 10 | Response JSON Tanggal Menggunakan RFC3339, Tidak Sesuai API Contract | Medium | ✅ Fixed & Verified |
 | 11 | Mock PayrollRepository Tidak Sinkron Setelah Interface Berubah (Transaksi pgx) | Medium | ✅ Fixed & Verified |
+| 12 | TRUNCATE ... RESTART IDENTITY Gagal karena Privilege Ownership Sequence | Medium | ✅ Fixed & Verified |
 
-Seluruh kasus ditemukan melalui exploratory testing manual (Postman), bukan simulasi/hipotesis — setiap "Before" adalah response aktual yang tercatat, dan setiap "Verifikasi" adalah hasil retest aktual setelah fix diterapkan.
+Seluruh kasus ditemukan melalui exploratory testing manual (Postman), bukan simulasi/hipotesis, setiap "Before" adalah response aktual yang tercatat, dan setiap "Verifikasi" adalah hasil retest aktual setelah fix diterapkan.
