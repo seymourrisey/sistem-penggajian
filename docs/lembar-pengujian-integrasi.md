@@ -10,7 +10,7 @@
 - **Command Eksekusi:** `go test ./tests/integration/... -v`
 - **Strategi Reset State:** Truncate sekali di awal seluruh test run (bukan per test function), lewat `TestMain`. `TRUNCATE departemen, karyawan, komponen_gaji, payroll CASCADE` — tanpa `RESTART IDENTITY` (lihat `docs/debugging-log.md` Bug #12: RESTART IDENTITY butuh ownership sequence, bertentangan dengan least privilege / NF5). Konsekuensi: id tidak predictable, seluruh test mengambil id lewat `RETURNING id`, bukan hardcode.
 - **Data Uji Dependency:** 2 departemen di-seed di `TestMain` sebelum test run (`IT`, `HR`), id disimpan di variabel `seedDepartemenITID` / `seedDepartemenHRID` — dipakai seluruh test yang butuh `departemen_id` valid.
-- **Tanggal Eksekusi Terakhir:** [isi tanggal aktual saat run]
+- **Tanggal Eksekusi Terakhir:** 23 July 2026
 - **Hasil Keseluruhan:** 12/12 skenario PASS
 
 ---
