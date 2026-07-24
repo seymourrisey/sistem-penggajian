@@ -1,6 +1,7 @@
 # docs/code-review-checklist.md
 
-- **Scope Review:** `internal/service/*.go`, `internal/repository/*.go`, `internal/handler/*.go` + `bind_error.go`, `internal/model/*.go`, `internal/util/sort.go`, `internal/config/config.go`. **Belum mencakup** `router.go` dan `cmd/api/main.go`.
+- **Scope Review:** `internal/service/*.go`, `internal/repository/*.go`, `internal/handler/*.go` + `bind_error.go`, `internal/model/*.go`, `internal/util/sort.go`, `internal/config/config.go`. 
+- **Belum mencakup** `router.go` dan `cmd/api/main.go`.
 - **Metode:** Self-review, dilakukan setelah implementasi fase 1 selesai (handler + router + wiring berjalan), bukan sebelum menulis kode.
 
 ---
