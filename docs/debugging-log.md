@@ -1,14 +1,15 @@
 # Debugging Log — Sistem Informasi Penggajian
 
-**Bukti Kompetensi:** #6 — Melakukan Debugging
-**Metode:** Exploratory testing manual via Postman terhadap seluruh endpoint REST API, dilakukan setelah handler + router + wiring selesai
-**Total kasus:** 13 bug ditemukan, 13 bug diperbaiki dan diverifikasi ulang.
+- **Metode:** Exploratory testing manual via Postman terhadap seluruh endpoint REST API, dilakukan setelah handler + router + wiring selesai
+- **Total kasus:** 13 bug ditemukan, 13 bug diperbaiki dan diverifikasi ulang.
 
 ---
 
 ## Cara Membaca Dokumen Ini
 
 Setiap kasus dicatat dengan struktur yang sama:
+- **Endpoint** — endpoint HTTP yang terdampak (atau keterangan bahwa bug murni di test/infra, tidak ada endpoint HTTP langsung).
+- **Severity** — Low/Medium/High, skala yang sama dipakai konsisten di seluruh dokumen ini (dan di-reuse di `docs/code-review-checklist.md`).
 - **Langkah Reproduksi** — request persis yang memicu bug.
 - **Before** — response/behavior sebelum fix (bukti bug nyata terjadi, bukan hipotesis).
 - **Root Cause** — analisis kenapa bug terjadi, bukan cuma gejalanya.
@@ -220,7 +221,7 @@ Keempat kasus dites ulang via Postman, semua konsisten bahasa Indonesia, tidak a
 ## Bug #6 & #7 — Duplikat Komponen Gaji Bisa Tersimpan, Error Duplikat Saat Update Bocor Mentah (2 Kasus, 1 Root Cause)
 
 - **Endpoint terdampak:** `POST /api/karyawan/:id/komponen-gaji`, `PUT /api/karyawan/:id/komponen-gaji/:komponen_id`
-- **Severity:** High — kasus #6 adalah data integrity issue (data invalid bisa tersimpan), bukan cuma masalah kosmetik error message.
+- **Severity:** Kasus #6 = High (data integrity issue — data invalid bisa tersimpan). Kasus #7 = Medium (error handling — pesan mentah bocor ke client, tapi tidak ada data yang corrupt). Konsisten dengan pemisahan severity di tabel Ringkasan.
 
 ### Kasus #6 — Insert Duplikat Diterima Tanpa Ditolak
 
@@ -416,58 +417,42 @@ Response bersih, satu JSON object tunggal, tidak ada lagi warning "headers alrea
 
 ## Bug #10 — Response JSON Tanggal Menggunakan RFC3339, Tidak Sesuai API Contract
 
-**Endpoint:** 
-- `POST /api/payroll/generate`
-- `GET /api/payroll/:karyawan_id/riwayat`
-- `GET /api/payroll/laporan`
-- `POST /api/karyawan`
-- `GET /api/karyawan`
-- `GET /api/karyawan/:id`
-- `PUT /api/karyawan/:id`
-
-**Severity:** Medium
+- **Endpoint terdampak:**
+  - `POST /api/payroll/generate`
+  - `GET /api/payroll/:karyawan_id/riwayat`
+  - `GET /api/payroll/laporan`
+  - `POST /api/karyawan`
+  - `GET /api/karyawan`
+  - `GET /api/karyawan/:id`
+  - `PUT /api/karyawan/:id`
+- **Severity:** Medium
 
 ### Langkah Reproduksi
-
-Lakukan request ke endpoint payroll atau karyawan, kemudian perhatikan
-field `periode` atau `tanggal_masuk` pada response.
+Lakukan request ke endpoint payroll atau karyawan, kemudian perhatikan field `periode` atau `tanggal_masuk` pada response.
 
 ### Before
-
-``` json
+```json
 {"periode":"2026-07-20T00:00:00Z","tanggal_masuk":"2024-03-01T00:00:00Z"}
 ```
 
 ### Root Cause
-
-Field bertipe `time.Time` dikirim langsung menggunakan `c.JSON(...)`.
-Library `encoding/json` memanggil `time.Time.MarshalJSON()` sehingga
-otomatis menghasilkan format RFC3339, bukan `YYYY-MM-DD` seperti yang
-ditetapkan pada API Contract.
+Field bertipe `time.Time` dikirim langsung menggunakan `c.JSON(...)`. Library `encoding/json` memanggil `time.Time.MarshalJSON()` sehingga otomatis menghasilkan format RFC3339, bukan `YYYY-MM-DD` seperti yang ditetapkan pada API Contract.
 
 ### Fix (After)
-
-Ditambahkan DTO (`karyawanResponse`, `payrollResponse`,
-`riwayatResponse`, dan `laporanResponse`) pada layer handler. Seluruh
-field tanggal diformat menggunakan `Format(dateOnlyLayout)` sebelum
-dikirim ke client. Model domain tetap menggunakan `time.Time` sehingga
-repository dan database tidak berubah.
+Ditambahkan DTO (`karyawanResponse`, `payrollResponse`, `riwayatResponse`, dan `laporanResponse`) pada layer handler. Seluruh field tanggal diformat menggunakan `Format(dateOnlyLayout)` sebelum dikirim ke client. Model domain tetap menggunakan `time.Time` sehingga repository dan database tidak berubah.
 
 ### Verifikasi
-
-``` json
+```json
 {"periode":"2026-07-20","tanggal_masuk":"2024-03-01"}
 ```
-
-Seluruh endpoint terkait diuji ulang melalui Postman dan kini konsisten
-menggunakan format `YYYY-MM-DD`.
+Seluruh endpoint terkait diuji ulang melalui Postman dan kini konsisten menggunakan format `YYYY-MM-DD`.
 
 ---
 
 ## Bug #11 — Mock PayrollRepository Tidak Sinkron Setelah Interface Berubah (Transaksi pgx)
 
-**Endpoint terdampak:** Tidak ada endpoint HTTP langsung — ini compile-time failure di `tests/unit/payroll_service_test.go`, dipicu oleh perubahan signature interface `PayrollRepository.Create` saat menambahkan transaksi pgx eksplisit di `GeneratePayroll`.
-**Severity:** Medium — tidak berdampak ke runtime/production, tapi memblokir seluruh test suite unit (build failed, 0 test bisa jalan).
+- **Endpoint terdampak:** Tidak ada endpoint HTTP langsung — ini compile-time failure di `tests/unit/payroll_service_test.go`, dipicu oleh perubahan signature interface `PayrollRepository.Create` saat menambahkan transaksi pgx eksplisit di `GeneratePayroll`.
+- **Severity:** Medium — tidak berdampak ke runtime/production, tapi memblokir seluruh test suite unit (build failed, 0 test bisa jalan).
 
 ### Langkah Reproduksi
 ```go
@@ -524,9 +509,8 @@ ok  	github.com/seymourrisey/sistem-penggajian/tests/unit
 
 ## Bug #12 — TRUNCATE ... RESTART IDENTITY Gagal karena Privilege Ownership Sequence
 
-**Endpoint terdampak:** Tidak ada endpoint HTTP langsung — ini kegagalan setup di `TestMain` (`tests/integration/karyawan_api_test.go`), dipicu oleh statement `TRUNCATE ... RESTART IDENTITY CASCADE` yang dijalankan sebagai user `payroll_test_app` untuk membersihkan state database sebelum tiap integration test run.
-
-**Severity:** Medium — tidak berdampak ke runtime/production, tapi memblokir seluruh integration test suite (TestMain gagal di tahap setup sebelum satu pun test case sempat jalan).
+- **Endpoint terdampak:** Tidak ada endpoint HTTP langsung — ini kegagalan setup di `TestMain` (`tests/integration/karyawan_api_test.go`), dipicu oleh statement `TRUNCATE ... RESTART IDENTITY CASCADE` yang dijalankan sebagai user `payroll_test_app` untuk membersihkan state database sebelum tiap integration test run.
+- **Severity:** Medium — tidak berdampak ke runtime/production, tapi memblokir seluruh integration test suite (TestMain gagal di tahap setup sebelum satu pun test case sempat jalan).
 
 ### Langkah Reproduksi
 
@@ -613,18 +597,18 @@ PASS
 
 | # | Bug | Severity | Status |
 |---|---|---|---|
-| 1 | FK violation delete departemen → 500 | Medium | ✅ Fixed & Verified |
-| 2 | Raw validator error (field kosong) | Medium | ✅ Fixed & Verified |
-| 3 | Raw decimal parse error | Medium | ✅ Fixed & Verified |
-| 4 | Raw JSON type mismatch error | Medium | ✅ Fixed & Verified |
-| 5 | Raw validator error (partial update) | Medium | ✅ Fixed & Verified |
-| 6 | Duplikat komponen gaji tersimpan | High | ✅ Fixed & Verified |
-| 7 | Error duplikat saat update bocor mentah | Medium | ✅ Fixed & Verified |
-| 8 | IDOR — update komponen gaji lintas karyawan | High | ✅ Fixed & Verified |
-| 9 | Double response write pada PUT departemen | Medium | ✅ Fixed & Verified |
-| 10 | Response JSON Tanggal Menggunakan RFC3339, Tidak Sesuai API Contract | Medium | ✅ Fixed & Verified |
-| 11 | Mock PayrollRepository Tidak Sinkron Setelah Interface Berubah (Transaksi pgx) | Medium | ✅ Fixed & Verified |
-| 12 | TRUNCATE ... RESTART IDENTITY Gagal karena Privilege Ownership Sequence | Medium | ✅ Fixed & Verified |
-| 13 | Response PUT /api/karyawan/:id Mengembalikan `status` dan `created_at` Kosong | Medium | ✅ Fixed & Verified |
+| 1 | FK violation delete departemen → 500 | Medium |  Fixed & Verified |
+| 2 | Raw validator error (field kosong) | Medium |  Fixed & Verified |
+| 3 | Raw decimal parse error | Medium | Fixed & Verified |
+| 4 | Raw JSON type mismatch error | Medium | Fixed & Verified |
+| 5 | Raw validator error (partial update) | Medium | Fixed & Verified |
+| 6 | Duplikat komponen gaji tersimpan | High | Fixed & Verified |
+| 7 | Error duplikat saat update bocor mentah | Medium | Fixed & Verified |
+| 8 | IDOR — update komponen gaji lintas karyawan | High | Fixed & Verified |
+| 9 | Double response write pada PUT departemen | Medium | Fixed & Verified |
+| 10 | Response JSON Tanggal Menggunakan RFC3339, Tidak Sesuai API Contract | Medium | Fixed & Verified |
+| 11 | Mock PayrollRepository Tidak Sinkron Setelah Interface Berubah (Transaksi pgx) | Medium | Fixed & Verified |
+| 12 | TRUNCATE ... RESTART IDENTITY Gagal karena Privilege Ownership Sequence | Medium |  Fixed & Verified |
+| 13 | Response PUT /api/karyawan/:id Mengembalikan `status` dan `created_at` Kosong | Medium |  Fixed & Verified |
 
 Seluruh kasus ditemukan melalui exploratory testing manual (Postman), bukan simulasi/hipotesis, setiap "Before" adalah response aktual yang tercatat, dan setiap "Verifikasi" adalah hasil retest aktual setelah fix diterapkan.
