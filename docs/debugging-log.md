@@ -257,7 +257,7 @@ Status: 500 Internal Server Error
 
 ### Root Cause
 Dua masalah terpisah yang saling berkaitan:
-1. Tabel `komponen_gaji` di database aktual **belum punya UNIQUE constraint** pada kombinasi `(karyawan_id, jenis, nama)`, walaupun constraint ini sudah tercantum di skema desain (`ProjectDesign.md` section 2.1) — constraint di dokumen tidak pernah benar-benar diterapkan (dieksekusi) ke database.
+1. Tabel `komponen_gaji` di database aktual **belum punya UNIQUE constraint** pada kombinasi `(karyawan_id, jenis, nama)`, walaupun constraint ini sudah tercantum di skema desain (`project-design.md` section 2.1) — constraint di dokumen tidak pernah benar-benar diterapkan (dieksekusi) ke database.
 2. Fungsi `komponenGajiRepository.Update` tidak pernah memanggil `mapKomponenGajiPgError` sama sekali (berbeda dari `Create` yang sejak awal sudah benar memanggilnya) — begitu constraint di poin 1 ditambahkan, error 23505 dari `Update` tetap bocor mentah karena tidak ada mapping.
 
 ### Fix (After)
@@ -562,7 +562,7 @@ ok  	github.com/seymourrisey/sistem-penggajian/tests/integration	1.914s [no test
 ```go
 go test ./tests/integration/... -v -run TestUpdateKaryawan/status_tidak_berubah_meski_dikirim
 ```
-(subtest baru yang sengaja mengirim `"status": "nonaktif"` di body PUT untuk memverifikasi business rule immutability status, lihat `ProjectDesign-SistemPenggajian.md` section 2.2)
+(subtest baru yang sengaja mengirim `"status": "nonaktif"` di body PUT untuk memverifikasi business rule immutability status, lihat `project-design.md` section 2.2)
 ### Before
 ```log
 karyawan_update_test.go:159: status seharusnya tetap aktif meski dikirim nonaktif di body PUT, got

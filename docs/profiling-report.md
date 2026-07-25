@@ -58,7 +58,7 @@ Execution Time: 4.486 ms
 
 **Planner tidak memakai `idx_payroll_karyawan_periode` sama sekali** — keputusan cost-based yang benar. PostgreSQL tidak memakai ambang selektivitas tetap; keputusan seq scan vs index scan dihitung ulang tiap query dari estimasi cost (page cost, row cost, statistik tabel). Untuk query ini, dengan 33% baris `payroll` cocok filter (5.000 dari 15.000), biaya membaca hampir semua halaman tabel secara sequential lebih murah daripada random I/O per baris lewat index, konsisten dengan heuristik umum bahwa index scan biasanya kalah bersaing begitu porsi baris yang cocok filter cukup besar (bukan aturan baku, melainkan hasil kalkulasi biaya). Estimasi planner (rows=5000) sama persis dengan aktual, statistik tabel akurat, bukan basi.
 
-**Kesimpulan:** Index tidak memberi percepatan terukur pada volume & pola query ini. Dipertahankan di schema sebagai antisipasi skalabilitas jangka panjang (lihat NF2, `ProjectDesign-SistemPenggajian.md` section 2.2) — jika jumlah periode bertambah signifikan (mis. data 5 tahun = 60 periode), selektivitas filter periode akan jauh lebih tajam.
+**Kesimpulan:** Index tidak memberi percepatan terukur pada volume & pola query ini. Dipertahankan di schema sebagai antisipasi skalabilitas jangka panjang (lihat NF2, `project-design.md` section 2.2) — jika jumlah periode bertambah signifikan (mis. data 5 tahun = 60 periode), selektivitas filter periode akan jauh lebih tajam.
 
 ### 1.2 Kasus 2 - `GET /api/payroll/:karyawan_id/riwayat` (selektivitas tinggi, ~0.02%)
 
@@ -121,7 +121,7 @@ Total alloc_space riwayat jauh lebih besar dari laporan (293MB vs 62MB) — buka
 
 **`math/big`** (dipakai internal oleh `shopspring/decimal` untuk presisi desimal) konsisten muncul di **kedua** endpoint — bukan kebetulan sekali capture: 14.51% (9MB) di endpoint laporan (`math/big.nat.make`), ~10-15% di endpoint riwayat (kombinasi `math/big.(*Int).Text`, `math/big.nat.make`, `math/big.nat.itoa`, terkait konversi `decimal.Decimal`).
 
-Ini **trade-off desain yang disengaja** (presisi finansial vs memory footprint), bukan bug — `decimal.Decimal` dipilih justru untuk menghindari floating-point error di kalkulasi gaji (lihat `ProjectDesign-SistemPenggajian.md` section 2.2).
+Ini **trade-off desain yang disengaja** (presisi finansial vs memory footprint), bukan bug — `decimal.Decimal` dipilih justru untuk menghindari floating-point error di kalkulasi gaji (lihat `project-design.md` section 2.2).
 
 ### 2.5 Kesimpulan Memory
 

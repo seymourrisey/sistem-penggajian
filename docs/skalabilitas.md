@@ -2,7 +2,7 @@
 
 ## 1. Lingkup Sistem & Lingkungan Operasi
 
-**Lingkup data riil:** Dataset seed (`migrations/seed.sql`) berisi **50 baris karyawan**, diambil dan ditransformasi dari dataset publik Kaggle *Employee Salary Dataset* (lihat `ProjectDesign-SistemPenggajian.md` section 4.3). Ini adalah skala data aktual proyek untuk keperluan uji kompetensi — bukan skala production riil.
+**Lingkup data riil:** Dataset seed (`migrations/seed.sql`) berisi **50 baris karyawan**, diambil dan ditransformasi dari dataset publik Kaggle *Employee Salary Dataset* (lihat `project-design.md` section 4.3). Ini adalah skala data aktual proyek untuk keperluan uji kompetensi — bukan skala production riil.
 
 **Skenario stress-test:** Untuk membuktikan pemahaman terhadap *pola* skalabilitas (bukan sekadar klaim teoretis), pengujian performa (`docs/profiling-report.md`) dilakukan pada database terpisah (`payroll_profiling_db`) dengan data sintetis yang diperbesar ke **5.000 karyawan / 15.000 baris payroll (3 periode)**. Ini proyeksi disengaja untuk mensimulasikan pertumbuhan data ~100x dari seed asli, agar analisis index dan bottleneck punya dasar empiris, bukan asumsi kosong.
 
@@ -37,7 +37,7 @@ Karena target deployment belum ditentukan (bagian 1), estimasi berikut berbasis 
 
 ## 4. Index Strategy
 
-Tiga index custom (`idx_karyawan_departemen`, `idx_payroll_karyawan_periode`, `idx_komponen_karyawan`) dipasang di kolom yang dipakai `WHERE`/`JOIN` (`ProjectDesign-SistemPenggajian.md` §2.2), bukan dipasang di semua kolom secara serampangan. Bukti empiris (`profiling-report.md` §1) menunjukkan:
+Tiga index custom (`idx_karyawan_departemen`, `idx_payroll_karyawan_periode`, `idx_komponen_karyawan`) dipasang di kolom yang dipakai `WHERE`/`JOIN` (`project-design.md` §2.2), bukan dipasang di semua kolom secara serampangan. Bukti empiris (`profiling-report.md` §1) menunjukkan:
 
 - **`idx_payroll_karyawan_periode`** tidak memberi percepatan terukur pada volume/pola query saat ini (selektivitas ~33%) — tetap dipertahankan sebagai antisipasi jangka panjang (bila jumlah periode bertambah signifikan, mis. data 5 tahun = 60 periode, selektivitas filter periode akan jauh lebih tajam).
 - **`payroll_karyawan_id_periode_key`** (index tersembunyi dari `UNIQUE(karyawan_id, periode)`) terbukti memberi percepatan ~24x pada query selektivitas tinggi — index ini berfungsi ganda: enforcement business rule (cegah duplikasi payroll) sekaligus index performa.
@@ -84,7 +84,7 @@ Tidak ditemukan indikasi memory leak selama pengujian (`profiling-report.md` §2
 - Read replica PostgreSQL — jika endpoint laporan (read-heavy, agregasi) jadi beban signifikan terpisah dari transaksi tulis (`GeneratePayroll`).
 - Load balancer + multiple instance API — jika concurrent request jauh melampaui kapasitas satu instance Gin.
 
-Kedua opsi ini **tidak diimplementasikan** dalam scope proyek (sesuai batasan scope, `ProjectDesign-SistemPenggajian.md` §1.3) — didokumentasikan sebagai kesadaran arah scaling, bukan kebutuhan aktual saat ini.
+Kedua opsi ini **tidak diimplementasikan** dalam scope proyek (sesuai batasan scope, `project-design.md` §1.3) — didokumentasikan sebagai kesadaran arah scaling, bukan kebutuhan aktual saat ini.
 
 ---
 
