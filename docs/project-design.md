@@ -212,11 +212,21 @@ sistem-penggajian/
 │   ├── 002_sql_native_features.sql
 │   ├── setup-db-user-privilege-terbatas.sql
 │   └── seed.sql
-├── tests/
-│   ├── unit/
-│   │   ├── payroll_service_test.go
-│   │   └── sort_test.go
-│   └── integration/karyawan_api_test.go
+├── tests
+│   ├── integration
+│   │   ├── departemen_delete_test.go
+│   │   ├── karyawan_api_test.go
+│   │   ├── karyawan_create_test.go
+│   │   ├── karyawan_getbyid_test.go
+│   │   ├── karyawan_softdelete_test.go
+│   │   ├── karyawan_update_test.go
+│   │   ├── komponen_gaji_list_test.go
+│   │   ├── payroll_generate_test.go
+│   │   └── payroll_riwayat_test.go
+│   └── unit
+│       ├── payroll_service_test.go
+│       ├── sort_bench_test.go
+│       └── sort_test.go
 ├── docs/
 │   ├── skalabilitas.md
 │   ├── code-review-checklist.md
