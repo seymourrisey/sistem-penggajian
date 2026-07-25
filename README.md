@@ -184,10 +184,14 @@ Lihat `.env.example` untuk daftar lengkap & nilai default aktual.
 ---
 
 ## Dokumentasi Kode (Godoc)
-
 Seluruh exported function/struct memiliki godoc comment. Untuk generate/lihat:
-```bash
-go doc ./internal/service
-go doc ./internal/repository
-go doc ./internal/handler
-```
+\`\`\`bash
+go doc -all ./internal/service
+go doc -all ./internal/repository
+go doc -all ./internal/handler
+\`\`\`
+
+Atau untuk fungsi/struct spesifik:
+\`\`\`bash
+go doc ./internal/service PayrollService
+\`\`\`
