@@ -2,6 +2,7 @@ package integration
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -127,6 +128,18 @@ func TestGeneratePayroll(t *testing.T) {
 		secondRec := doGeneratePayrollRequest(t, generateBody)
 		if secondRec.Code != http.StatusConflict {
 			t.Fatalf("expected status 409, got %d, body: %s", secondRec.Code, secondRec.Body.String())
+		}
+
+		// Verifikasi: tidak ada duplikasi data payroll.
+		var count int
+		err := testPool.QueryRow(context.Background(),
+			`SELECT COUNT(*) FROM payroll WHERE karyawan_id = $1 AND periode = $2`,
+			karyawanID, "2026-08-01").Scan(&count)
+		if err != nil {
+			t.Fatalf("gagal query count payroll: %v", err)
+		}
+		if count != 1 {
+			t.Errorf("expected exactly 1 payroll row (no partial/duplicate commit), got %d", count)
 		}
 	})
 }
