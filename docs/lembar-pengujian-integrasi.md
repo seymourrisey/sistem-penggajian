@@ -3,6 +3,7 @@
 - **Kode Test:** `tests/integration/karyawan_api_test.go` (TestMain — setup), `karyawan_create_test.go`, `karyawan_getbyid_test.go`, `karyawan_update_test.go`, `karyawan_softdelete_test.go`, `payroll_generate_test.go`, `payroll_riwayat_test.go`, `komponen_gaji_list_test.go`, `departemen_delete_test.go`
 - **Metode:** `httptest` + `testRouter.ServeHTTP`, full dependency chain nyata (repository → service → handler → router) terhubung ke database PostgreSQL sungguhan (bukan mock)
 - **Peralatan:**
+  - Spesifikasi perangkat pengembangan : Dell Latitude 7280, Intel(R) Core(TM) i7-7600U CPU @ 2.80GHz, Windows 10 Build 19045 
   - Database: PostgreSQL, database `payroll_test_db` (terpisah dari `payroll_db` production)
   - User database test: `payroll_test_app`, privilege terbatas (DML + TRUNCATE tabel, tanpa ownership sequence)
   - Environment config: `.env.test`, dimuat via override `ENV_FILE=../../.env.test` (working directory `go test` berada di folder package, bukan root project)
