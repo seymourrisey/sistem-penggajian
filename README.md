@@ -1,4 +1,4 @@
-# Sistem Informasi Penggajian
+# Sistem Penggajian
 
 REST API sistem penggajian berbasis web. Mencakup CRUD karyawan/departemen, pengelolaan komponen gaji (tunjangan/potongan), generate slip gaji per periode, riwayat gaji, dan laporan agregat per departemen.
 
