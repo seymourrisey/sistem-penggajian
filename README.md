@@ -2,7 +2,7 @@
 
 REST API sistem penggajian berbasis web. Mencakup CRUD karyawan/departemen, pengelolaan komponen gaji (tunjangan/potongan), generate slip gaji per periode, riwayat gaji, dan laporan agregat per departemen.
 
-Detail rancangan lengkap (requirements, skema database, justifikasi desain, mapping kompetensi) ada di `ProjectDesign-SistemPenggajian.md`.
+Detail rancangan lengkap (requirements, skema database, justifikasi desain, mapping kompetensi) ada di `docs/project-design.md`.
 
 ---
 
@@ -43,7 +43,7 @@ Aplikasi **tidak** menggunakan user `postgres` (superuser). Buat database dulu, 
 psql -U postgres -c "CREATE DATABASE payroll_db;"
 psql -U postgres -d payroll_db -f migrations/setup-db-user-privilege-terbatas.sql
 ```
-Script ini membuat user `payroll_app` dan meng-grant `SELECT, INSERT, UPDATE, DELETE` pada schema aplikasi — tanpa `DROP`/`CREATE`, sesuai prinsip least privilege (lihat `ProjectDesign-SistemPenggajian.md` section 2.4) dengan catatan mohon di edit `setup-db-user-privilege-terbatas.sql` pada bagian ```LOGIN PASSWORD 'ganti_password_kuat_disini'```.
+Script ini membuat user `payroll_app` dan meng-grant `SELECT, INSERT, UPDATE, DELETE` pada schema aplikasi — tanpa `DROP`/`CREATE`, sesuai prinsip least privilege (lihat `docs/project-design.md` section 2.4) dengan catatan mohon di edit `setup-db-user-privilege-terbatas.sql` pada bagian ```LOGIN PASSWORD 'ganti_password_kuat_disini'```.
 
 ### 3. Jalankan Migration (urutan wajib berurutan)
 ```bash
