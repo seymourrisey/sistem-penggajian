@@ -1,7 +1,8 @@
 # Debugging Log — Sistem Informasi Penggajian
 
-- **Metode:** Exploratory testing manual via Postman terhadap seluruh endpoint REST API, dilakukan setelah handler + router + wiring selesai
-- **Total kasus:** 13 bug ditemukan, 13 bug diperbaiki dan diverifikasi ulang.
+**Bukti Kompetensi:** #6 — Melakukan Debugging
+**Metode:** Exploratory testing manual via Postman terhadap seluruh endpoint REST API, dilakukan setelah handler + router + wiring selesai
+**Total kasus:** 13 bug ditemukan, 13 bug diperbaiki dan diverifikasi ulang.
 
 ---
 
@@ -593,12 +594,125 @@ PASS
 
 ---
 
+## Verifikasi Tambahan Menggunakan Delve (Go Debugger)
+
+Seluruh bug pada dokumen ini ditemukan melalui exploratory testing manual menggunakan Postman. Setelah akar masalah diidentifikasi dan didokumentasikan, dilakukan verifikasi tambahan menggunakan Delve (Go debugger) untuk menelusuri alur eksekusi program dan mengonfirmasi root cause pada beberapa kasus yang representatif. Root cause kedua kasus di bawah **sudah diketahui dan sudah di-fix** sebelumnya (lihat Bug #8 dan #13 di atas); untuk keperluan verifikasi ini, fix pada kode sementara di-revert ke versi buggy, direproduksi ulang, ditelusuri lewat Delve, lalu dikembalikan ke versi fixed.
+
+### Tujuan Penggunaan Delve
+
+Penggunaan Delve pada bagian ini bertujuan untuk:
+- memasang breakpoint pada modul yang dianalisis;
+- menginspeksi nilai variabel saat runtime;
+- menelusuri alur eksekusi fungsi;
+- mengonfirmasi bahwa root cause yang telah diidentifikasi benar-benar terjadi pada saat program berjalan.
+
+### Verifikasi Bug #8 (IDOR) via Delve
+
+**Setup:** query `UPDATE` di `komponenGajiRepository.Update` sementara dikembalikan ke versi sebelum fix — klausa `AND karyawan_id = $6` dihapus dari query **dan** argumen `k.KaryawanID` dihapus dari pemanggilan `Exec` (supaya jumlah placeholder dan argumen tetap cocok). Untuk keperluan verifikasi debugger, perubahan kode sementara dikembalikan ke kondisi sebelum perbaikan (revert lokal tanpa commit), kemudian setelah proses debugging selesai dikembalikan lagi ke versi final — tidak ada perubahan histori Git.
+
+**Breakpoint:**
+```
+(dlv) break internal/repository.(*komponenGajiRepository).Update
+Breakpoint 1 set at ... komponen_gaji_repository.go:127
+(dlv) break internal/repository/komponen_gaji_repository.go:144
+Breakpoint 2 set at ... komponen_gaji_repository.go:144
+(dlv) continue
+```
+
+**Request pemicu (reproduksi langkah asli Bug #8):**
+```
+PUT /api/karyawan/1/komponen-gaji/15
+```
+(`komponen_id=15` sebenarnya milik `karyawan_id=2`, bukan `karyawan_id=1` yang ada di URL)
+
+**Inspect variable saat breakpoint #1 (baris 127, awal fungsi):**
+```
+(dlv) print k.ID
+15
+(dlv) print k.KaryawanID
+1
+```
+Konfirmasi: parameter yang diterima fungsi persis sesuai skenario bug — `karyawan_id` dari URL (1) tidak sama dengan pemilik asli komponen (2).
+
+**Inspect variable saat breakpoint #2 (baris 144, setelah `Exec` selesai):**
+```
+(dlv) print tag
+github.com/jackc/pgx/v5/pgconn.CommandTag {
+	s: "UPDATE 1",
+}
+(dlv) call tag.RowsAffected()
+Values returned:
+	~r0: 1
+(dlv) print err
+error nil
+```
+`RowsAffected()` dipanggil dari Delve untuk memverifikasi jumlah row yang benar-benar berubah di database.
+
+Konfirmasi langsung dari eksekusi nyata: `err` = nil, `tag.RowsAffected()` = **1** — satu row benar-benar berubah di database meskipun `karyawan_id` di URL tidak cocok dengan pemilik asli. Ini membuktikan root cause Bug #8 secara langsung (bukan hanya lewat pembacaan kode statis): query `WHERE id = $5` tanpa klausa `AND karyawan_id` tidak pernah memvalidasi kepemilikan, sehingga request berhasil (`200 OK`, dikonfirmasi via log server `[GIN] ... | 200 | ... | PUT "/api/karyawan/1/komponen-gaji/15"`) dan mengubah data milik karyawan lain.
+
+**Setelah verifikasi:** kode query & argumen `Exec` dikembalikan ke versi fixed (`AND karyawan_id = $6` + `k.KaryawanID` di `Exec`), sesuai fix yang sudah tercatat di Bug #8.
+
+### Verifikasi Bug #13 (Response Kosong) via Delve
+
+**Setup:** fungsi `Update` di `karyawan_repository.go` sementara dikembalikan ke versi sebelum fix — `RETURNING status, created_at, updated_at` diganti balik jadi `RETURNING updated_at`, dan `Scan(&k.Status, &k.CreatedAt, &k.UpdatedAt)` diganti balik jadi `Scan(&k.UpdatedAt)`. Sama seperti verifikasi Bug #8, ini revert lokal tanpa commit — dikembalikan lagi ke versi final setelah debugging selesai.
+
+**Breakpoint (di handler, bukan repository — bug ini soal struct yang dipakai buat build response):**
+```
+(dlv) break internal/handler.(*KaryawanHandler).Update
+Breakpoint 1 set at ... karyawan_handler.go:173
+(dlv) continue
+```
+
+**Request pemicu (reproduksi langkah asli Bug #13):**
+```
+PUT /api/karyawan/1
+```
+Body Request menggunakan payload yang sama seperti reproduksi Bug #13.
+
+**Cari titik tepat sebelum response dikirim:**
+```
+(dlv) list internal/handler/karyawan_handler.go:202
+```
+Menunjukkan `c.JSON(http.StatusOK, newKaryawanResponse(k))` di baris 207 — breakpoint kedua ditaruh di situ, tepat setelah `h.svc.Update(...)` selesai dan sebelum struct `k` dikirim ke client.
+```
+(dlv) break internal/handler/karyawan_handler.go:207
+(dlv) continue
+```
+
+**Inspect variable saat breakpoint #2 (baris 207):**
+```
+(dlv) print k.Status
+""
+(dlv) print k.CreatedAt
+time.Time(0001-01-01T00:00:00Z){
+	wall: 0,
+	ext: 0,
+	loc: *time.Location nil,
+}
+(dlv) print k.UpdatedAt
+time.Time(2026-07-25T08:40:02Z){
+	wall: 214279000,
+	ext: 63920565602,
+	loc: *time.Location nil,
+}
+```
+Konfirmasi langsung dari eksekusi nyata: `k.Status` dan `k.CreatedAt` tetap zero value (`""` dan `0001-01-01T00:00:00Z`), sementara `k.UpdatedAt` terisi normal (`2026-07-25T08:40:02Z`) — kontras ini membuktikan root cause Bug #13 secara langsung: hanya `updated_at` yang di-scan dari hasil `RETURNING`, sehingga `Status` dan `CreatedAt` pada struct `k` tidak pernah diisi ulang dari database dan tetap zero value Go saat `newKaryawanResponse(k)` dipanggil.
+
+**Setelah verifikasi:** kode `RETURNING`/`Scan` di `karyawan_repository.go` dikembalikan ke versi fixed (`RETURNING status, created_at, updated_at` + `Scan(&k.Status, &k.CreatedAt, &k.UpdatedAt)`), sesuai fix yang sudah tercatat di Bug #13.
+
+### Kesimpulan
+
+Melalui Delve, proses debugging tidak hanya dilakukan melalui inspeksi source code, tetapi juga melalui observasi langsung terhadap nilai variabel dan hasil eksekusi program saat runtime. Hasil observasi tersebut konsisten dengan root cause yang telah didokumentasikan pada Bug #8 dan Bug #13, sehingga memperkuat validitas analisis dan perbaikan yang dilakukan.
+
+---
+
+
 ## Ringkasan
 
 | # | Bug | Severity | Status |
 |---|---|---|---|
-| 1 | FK violation delete departemen → 500 | Medium |  Fixed & Verified |
-| 2 | Raw validator error (field kosong) | Medium |  Fixed & Verified |
+| 1 | FK violation delete departemen → 500 | Medium | Fixed & Verified |
+| 2 | Raw validator error (field kosong) | Medium | Fixed & Verified |
 | 3 | Raw decimal parse error | Medium | Fixed & Verified |
 | 4 | Raw JSON type mismatch error | Medium | Fixed & Verified |
 | 5 | Raw validator error (partial update) | Medium | Fixed & Verified |
@@ -608,7 +722,7 @@ PASS
 | 9 | Double response write pada PUT departemen | Medium | Fixed & Verified |
 | 10 | Response JSON Tanggal Menggunakan RFC3339, Tidak Sesuai API Contract | Medium | Fixed & Verified |
 | 11 | Mock PayrollRepository Tidak Sinkron Setelah Interface Berubah (Transaksi pgx) | Medium | Fixed & Verified |
-| 12 | TRUNCATE ... RESTART IDENTITY Gagal karena Privilege Ownership Sequence | Medium |  Fixed & Verified |
-| 13 | Response PUT /api/karyawan/:id Mengembalikan `status` dan `created_at` Kosong | Medium |  Fixed & Verified |
+| 12 | TRUNCATE ... RESTART IDENTITY Gagal karena Privilege Ownership Sequence | Medium | Fixed & Verified |
+| 13 | Response PUT /api/karyawan/:id Mengembalikan `status` dan `created_at` Kosong | Medium | Fixed & Verified |
 
 Seluruh kasus ditemukan melalui exploratory testing manual (Postman), bukan simulasi/hipotesis, setiap "Before" adalah response aktual yang tercatat, dan setiap "Verifikasi" adalah hasil retest aktual setelah fix diterapkan.

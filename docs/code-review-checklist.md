@@ -19,12 +19,12 @@
 
 | # | Kategori | Status | Severity Tertinggi | Catatan |
 |---|---|---|---|---|
-| 1 | Naming Convention | ✅ Pass | — | Tidak ditemukan penyimpangan pada file yang direview |
-| 2 | Error Handling | ⚠️ Ditemukan Masalah | Low | Lihat Temuan #1 |
-| 3 | SQL Injection Safety | ✅ Pass | — | Seluruh query di file yang direview parameterized |
-| 4 | Konsistensi Struct/DTO | ⚠️ Ditemukan Masalah | Low | Lihat Temuan #2, #3 |
-| 5 | Dependency Flow | ✅ Pass | — | Tidak ditemukan penyimpangan pada file yang direview |
-| 6 | Godoc | ✅ Pass | — | Tidak ditemukan penyimpangan pada file yang direview |
+| 1 | Naming Convention |  Pass | — | Tidak ditemukan penyimpangan pada file yang direview |
+| 2 | Error Handling |  Ditemukan Masalah | Low | Lihat Temuan #1 |
+| 3 | SQL Injection Safety |  Pass | — | Seluruh query di file yang direview parameterized |
+| 4 | Konsistensi Struct/DTO |  Ditemukan Masalah | Low | Lihat Temuan #2, #3 |
+| 5 | Dependency Flow |  Pass | — | Tidak ditemukan penyimpangan pada file yang direview |
+| 6 | Godoc |  Pass | — | Tidak ditemukan penyimpangan pada file yang direview |
 
 Kriteria detail tiap kategori:
 

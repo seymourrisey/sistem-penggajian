@@ -25,3 +25,6 @@ go.work.sum
 .env
 .env.profiling
 .env.test
+
+__debug.log
+__debug_bin.*
