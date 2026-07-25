@@ -159,6 +159,8 @@ func mapKomponenGajiError(c *gin.Context, err error) {
 	case errors.Is(err, service.ErrKomponenNamaKosong),
 		errors.Is(err, service.ErrJenisKomponenTidakValid):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	case errors.Is(err, repository.ErrKaryawanTidakAktif):
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	default:
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 	}

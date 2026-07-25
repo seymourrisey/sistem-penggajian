@@ -142,7 +142,7 @@ func TestMain(m *testing.M) {
 
 	departemenSvc := service.NewDepartemenService(departemenRepo)
 	karyawanSvc := service.NewKaryawanService(karyawanRepo)
-	komponenSvc := service.NewKomponenGajiService(komponenRepo)
+	komponenSvc := service.NewKomponenGajiService(komponenRepo, karyawanRepo)
 	payrollSvc := service.NewPayrollService(karyawanRepo, komponenRepo, payrollRepo)
 
 	departemenHandler := handler.NewDepartemenHandler(departemenSvc)

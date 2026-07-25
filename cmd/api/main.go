@@ -33,7 +33,7 @@ func main() {
 	// Service layer
 	departemenSvc := service.NewDepartemenService(departemenRepo)
 	karyawanSvc := service.NewKaryawanService(karyawanRepo)
-	komponenGajiSvc := service.NewKomponenGajiService(komponenGajiRepo)
+	komponenGajiSvc := service.NewKomponenGajiService(komponenGajiRepo, karyawanRepo)
 	payrollSvc := service.NewPayrollService(karyawanRepo, komponenGajiRepo, payrollRepo)
 
 	// Handler layer

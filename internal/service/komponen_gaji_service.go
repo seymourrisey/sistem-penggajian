@@ -29,12 +29,19 @@ type KomponenGajiService interface {
 }
 
 type komponenGajiService struct {
-	repo repository.KomponenGajiRepository
+	repo         repository.KomponenGajiRepository
+	karyawanRepo repository.KaryawanRepository
 }
 
 // NewKomponenGajiService membuat instance KomponenGajiService baru.
-func NewKomponenGajiService(repo repository.KomponenGajiRepository) KomponenGajiService {
-	return &komponenGajiService{repo: repo}
+func NewKomponenGajiService(
+	repo repository.KomponenGajiRepository,
+	karyawanRepo repository.KaryawanRepository,
+) KomponenGajiService {
+	return &komponenGajiService{
+		repo:         repo,
+		karyawanRepo: karyawanRepo,
+	}
 }
 
 // Create memvalidasi input lalu menyimpan komponen gaji baru.
@@ -46,6 +53,16 @@ func (s *komponenGajiService) Create(ctx context.Context, k *model.KomponenGaji)
 	if k.Jenis != model.JenisKomponenTunjangan && k.Jenis != model.JenisKomponenPotongan {
 		return ErrJenisKomponenTidakValid
 	}
+
+	karyawan, err := s.karyawanRepo.GetByID(ctx, k.KaryawanID)
+	if err != nil {
+		return err
+	}
+	// check status karyawan. status=nonaktif TOLAK
+	if karyawan.Status != model.StatusKaryawanAktif {
+		return repository.ErrKaryawanTidakAktif
+	}
+
 	return s.repo.Create(ctx, k)
 }
 
@@ -72,5 +89,15 @@ func (s *komponenGajiService) Update(ctx context.Context, k *model.KomponenGaji)
 	if k.Jenis != model.JenisKomponenTunjangan && k.Jenis != model.JenisKomponenPotongan {
 		return ErrJenisKomponenTidakValid
 	}
+
+	karyawan, err := s.karyawanRepo.GetByID(ctx, k.KaryawanID)
+	if err != nil {
+		return err
+	}
+	// check status karyawan. status=nonaktif TOLAK
+	if karyawan.Status != model.StatusKaryawanAktif {
+		return repository.ErrKaryawanTidakAktif
+	}
+
 	return s.repo.Update(ctx, k)
 }
