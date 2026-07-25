@@ -142,6 +142,63 @@ func TestGeneratePayroll(t *testing.T) {
 			t.Errorf("expected exactly 1 payroll row (no partial/duplicate commit), got %d", count)
 		}
 	})
+
+	t.Run("karyawan_nonaktif_400", func(t *testing.T) {
+		// Setup: karyawan baru, lalu soft-delete (jadi nonaktif) sebelum generate.
+		createBody := map[string]interface{}{
+			"nip":           "TPG-NONAKTIF-001",
+			"nama":          "Dewi Lestari",
+			"departemen_id": seedDepartemenITID,
+			"jabatan":       "Staff",
+			"gaji_pokok":    4500000,
+			"tanggal_masuk": "2023-03-01",
+		}
+		createRec := doCreateKaryawanRequest(t, createBody)
+		if createRec.Code != http.StatusCreated {
+			t.Fatalf("setup: create karyawan harus 201, got %d, body: %s", createRec.Code, createRec.Body.String())
+		}
+		karyawanID := extractIDFromResponse(t, createRec)
+
+		// Soft-delete langsung lewat DELETE /api/karyawan/:id (inline, tanpa
+		// helper terpisah, supaya file ini tidak bergantung pada helper yang
+		// didefinisikan di karyawan_softdelete_test.go).
+		deleteReq := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/karyawan/%d", karyawanID), nil)
+		deleteRec := httptest.NewRecorder()
+		testRouter.ServeHTTP(deleteRec, deleteReq)
+		if deleteRec.Code != http.StatusOK {
+			t.Fatalf("setup: soft-delete karyawan harus 200, got %d, body: %s", deleteRec.Code, deleteRec.Body.String())
+		}
+
+		generateBody := map[string]interface{}{
+			"karyawan_id": karyawanID,
+			"periode":     "2026-08-01",
+		}
+		rec := doGeneratePayrollRequest(t, generateBody)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected status 400, got %d, body: %s", rec.Code, rec.Body.String())
+		}
+
+		var resp map[string]interface{}
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("gagal decode response body: %v", err)
+		}
+		if resp["error"] != "karyawan tidak aktif" {
+			t.Errorf("expected error message 'karyawan tidak aktif', got %v", resp["error"])
+		}
+
+		// Verifikasi: tidak ada row payroll yang ke-insert untuk karyawan ini.
+		var count int
+		err := testPool.QueryRow(context.Background(),
+			`SELECT COUNT(*) FROM payroll WHERE karyawan_id = $1 AND periode = $2`,
+			karyawanID, "2026-08-01").Scan(&count)
+		if err != nil {
+			t.Fatalf("gagal query count payroll: %v", err)
+		}
+		if count != 0 {
+			t.Errorf("expected 0 payroll row (request ditolak sebelum insert), got %d", count)
+		}
+	})
 }
 
 // doCreateKomponenGajiRequest adalah helper untuk mengirim

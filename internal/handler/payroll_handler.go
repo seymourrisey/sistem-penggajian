@@ -186,6 +186,7 @@ func (h *PayrollHandler) GetLaporan(c *gin.Context) {
 
 // mapPayrollError memetakan error dari service/repository layer ke HTTP
 // status code, mengikuti skema yang sama dengan handler lain:
+//   - bad request          -> 400
 //   - not found            -> 404
 //   - duplikat / conflict  -> 409
 //   - selain itu           -> 500
@@ -195,6 +196,8 @@ func mapPayrollError(c *gin.Context, err error) {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 	case errors.Is(err, repository.ErrPayrollAlreadyExists):
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+	case errors.Is(err, repository.ErrKaryawanTidakAktif):
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	default:
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 	}

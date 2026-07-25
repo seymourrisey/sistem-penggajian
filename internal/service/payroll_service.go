@@ -67,6 +67,10 @@ func (s *payrollService) GeneratePayroll(ctx context.Context, karyawanID int, pe
 		return nil, err
 	}
 
+	if karyawan.Status != model.StatusKaryawanAktif {
+		return nil, repository.ErrKaryawanTidakAktif
+	}
+
 	komponenList, err := s.komponenRepo.GetByKaryawanID(ctx, karyawanID)
 	if err != nil {
 		return nil, err

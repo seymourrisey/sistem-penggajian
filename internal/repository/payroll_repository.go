@@ -17,6 +17,9 @@ import (
 // pelanggaran UNIQUE constraint payroll(karyawan_id, periode)).
 var ErrPayrollAlreadyExists = errors.New("payroll sudah ada untuk karyawan dan periode ini!")
 
+// ErrKaryawanTidakAktif dikembalikan ketika karyawan tidak aktif.
+var ErrKaryawanTidakAktif = errors.New("karyawan tidak aktif")
+
 // PayrollRepository mendefinisikan operasi akses data untuk tabel payroll,
 // termasuk query gabungan untuk riwayat dan laporan agregat (F5, F6).
 type PayrollRepository interface {

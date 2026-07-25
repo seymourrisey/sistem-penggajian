@@ -2,7 +2,7 @@
 
 **Bukti Kompetensi:** #6 — Melakukan Debugging
 **Metode:** Exploratory testing manual via Postman terhadap seluruh endpoint REST API, dilakukan setelah handler + router + wiring selesai
-**Total kasus:** 13 bug ditemukan, 13 bug diperbaiki dan diverifikasi ulang.
+**Total kasus:** 14 bug ditemukan, 14 bug diperbaiki dan diverifikasi ulang.
 
 ---
 
@@ -707,6 +707,54 @@ Melalui Delve, proses debugging tidak hanya dilakukan melalui inspeksi source co
 ---
 
 
+## Bug #14 — Generate Payroll untuk Karyawan Nonaktif Tidak Ditolak
+
+- **Endpoint:** `POST /api/payroll/generate`
+- **Severity:** Medium (data integrity — payroll tidak seharusnya bisa dibuat untuk karyawan yang statusnya sudah nonaktif/soft-deleted)
+
+### Langkah Reproduksi
+```
+POST /api/payroll/generate
+{"karyawan_id": "<id karyawan berstatus nonaktif>", "periode": "2026-08-01"}
+```
+
+### Before
+```
+[GIN] 2026/07/25 - 20:00:57 | 201 |   1.13ms |             ::1 | POST     "/api/payroll/generate"
+```
+Payroll berhasil digenerate meski karyawan berstatus `nonaktif` — tidak ada validasi status sebelum kalkulasi berjalan.
+
+### Root Cause
+`GeneratePayroll` di `payroll_service.go` memanggil `karyawanRepo.GetByID` untuk mengambil `gaji_pokok`, tapi tidak pernah memeriksa field `Status` dari hasil fetch tersebut. Karyawan yang sudah di-soft-delete (status `nonaktif`) tetap lolos karena secara teknis masih ada di tabel `karyawan` (by design, untuk audit trail riwayat payroll) — tapi status itu tidak pernah dicek di jalur generate payroll, sehingga karyawan yang sudah tidak aktif bisa tetap "digaji".
+
+### Fix (After)
+Tambah pengecekan status setelah `GetByID`, di `payroll_service.go`:
+```go
+if karyawan.Status != model.StatusKaryawanAktif {
+    return nil, repository.ErrKaryawanTidakAktif
+}
+```
+Sentinel error baru di `internal/repository/payroll_repository.go`:
+```go
+// ErrKaryawanTidakAktif dikembalikan ketika karyawan tidak aktif.
+var ErrKaryawanTidakAktif = errors.New("karyawan tidak aktif")
+```
+Mapping di `mapPayrollError` (`payroll_handler.go`):
+```go
+case errors.Is(err, repository.ErrKaryawanTidakAktif):
+    c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+```
+
+### Verifikasi
+```
+[GIN] 2026/07/25 - 20:02:23 | 400 |   4.14ms |             ::1 | POST     "/api/payroll/generate"
+```
+```json
+{"error": "karyawan tidak aktif"}
+```
+
+---
+
 ## Ringkasan
 
 | # | Bug | Severity | Status |
@@ -724,5 +772,6 @@ Melalui Delve, proses debugging tidak hanya dilakukan melalui inspeksi source co
 | 11 | Mock PayrollRepository Tidak Sinkron Setelah Interface Berubah (Transaksi pgx) | Medium | Fixed & Verified |
 | 12 | TRUNCATE ... RESTART IDENTITY Gagal karena Privilege Ownership Sequence | Medium | Fixed & Verified |
 | 13 | Response PUT /api/karyawan/:id Mengembalikan `status` dan `created_at` Kosong | Medium | Fixed & Verified |
+| 14 | Generate Payroll untuk Karyawan Nonaktif Tidak Ditolak | Medium | Fixed & Verified |
 
 Seluruh kasus ditemukan melalui exploratory testing manual (Postman), bukan simulasi/hipotesis, setiap "Before" adalah response aktual yang tercatat, dan setiap "Verifikasi" adalah hasil retest aktual setelah fix diterapkan.

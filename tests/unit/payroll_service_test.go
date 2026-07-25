@@ -146,7 +146,7 @@ func TestGeneratePayroll(t *testing.T) {
 	}{
 		{
 			name:                  "normal case: campuran flat & persen, tunjangan & potongan",
-			karyawan:              &model.Karyawan{ID: karyawanID, GajiPokok: decimal.NewFromInt(5000000)},
+			karyawan:              &model.Karyawan{ID: karyawanID, GajiPokok: decimal.NewFromInt(5000000), Status: model.StatusKaryawanAktif},
 			komponenList:          []model.KomponenGaji{tunjanganFlat, tunjanganPersen, potonganFlat, potonganPersen},
 			wantTotalTunjangan:    decimal.NewFromInt(1000000), // 500000 + (10% * 5jt = 500000)
 			wantTotalPotongan:     decimal.NewFromInt(300000),  // 200000 + (2% * 5jt = 100000)
@@ -159,7 +159,7 @@ func TestGeneratePayroll(t *testing.T) {
 		},
 		{
 			name:               "gaji_pokok nol: persen ikut jadi nol, flat tetap jalan",
-			karyawan:           &model.Karyawan{ID: karyawanID, GajiPokok: decimal.Zero},
+			karyawan:           &model.Karyawan{ID: karyawanID, GajiPokok: decimal.Zero, Status: model.StatusKaryawanAktif},
 			komponenList:       []model.KomponenGaji{tunjanganPersen, potonganFlat},
 			wantTotalTunjangan: decimal.Zero,                // 10% * 0 = 0
 			wantTotalPotongan:  decimal.NewFromInt(200000),  // flat tidak terpengaruh gaji_pokok
@@ -169,7 +169,7 @@ func TestGeneratePayroll(t *testing.T) {
 		},
 		{
 			name:               "komponen kosong: gaji_bersih = gaji_pokok apa adanya",
-			karyawan:           &model.Karyawan{ID: karyawanID, GajiPokok: decimal.NewFromInt(3000000)},
+			karyawan:           &model.Karyawan{ID: karyawanID, GajiPokok: decimal.NewFromInt(3000000), Status: model.StatusKaryawanAktif},
 			komponenList:       []model.KomponenGaji{},
 			wantTotalTunjangan: decimal.Zero,
 			wantTotalPotongan:  decimal.Zero,
@@ -179,7 +179,7 @@ func TestGeneratePayroll(t *testing.T) {
 		},
 		{
 			name:               "is_persen true murni: hanya tunjangan persen (10%)",
-			karyawan:           &model.Karyawan{ID: karyawanID, GajiPokok: decimal.NewFromInt(1000000)},
+			karyawan:           &model.Karyawan{ID: karyawanID, GajiPokok: decimal.NewFromInt(1000000), Status: model.StatusKaryawanAktif},
 			komponenList:       []model.KomponenGaji{tunjanganPersen},
 			wantTotalTunjangan: decimal.NewFromInt(100000), // 10% * 1jt
 			wantTotalPotongan:  decimal.Zero,
@@ -190,7 +190,7 @@ func TestGeneratePayroll(t *testing.T) {
 		{
 			// Gap #1: nominal 0% pada is_persen=true.
 			name:               "is_persen true dengan nominal 0%: kontribusi harus nol, bukan galat",
-			karyawan:           &model.Karyawan{ID: karyawanID, GajiPokok: decimal.NewFromInt(1000000)},
+			karyawan:           &model.Karyawan{ID: karyawanID, GajiPokok: decimal.NewFromInt(1000000), Status: model.StatusKaryawanAktif},
 			komponenList:       []model.KomponenGaji{tunjanganPersenNol},
 			wantTotalTunjangan: decimal.Zero,
 			wantTotalPotongan:  decimal.Zero,
@@ -205,16 +205,22 @@ func TestGeneratePayroll(t *testing.T) {
 			wantCreateCalled: false,
 		},
 		{
+			name:             "karyawan berstatus nonaktif: harus short-circuit, Create tidak dipanggil",
+			karyawan:         &model.Karyawan{ID: karyawanID, GajiPokok: decimal.NewFromInt(5000000), Status: model.StatusKaryawanNonaktif},
+			wantErr:          repository.ErrKaryawanTidakAktif,
+			wantCreateCalled: false,
+		},
+		{
 			// Gap #2: repository komponen_gaji gagal.
 			name:             "komponenRepo gagal: harus short-circuit, Create tidak dipanggil",
-			karyawan:         &model.Karyawan{ID: karyawanID, GajiPokok: decimal.NewFromInt(5000000)},
+			karyawan:         &model.Karyawan{ID: karyawanID, GajiPokok: decimal.NewFromInt(5000000), Status: model.StatusKaryawanAktif},
 			komponenErr:      errKomponenRepoGagal,
 			wantErr:          errKomponenRepoGagal,
 			wantCreateCalled: false,
 		},
 		{
 			name:               "payroll sudah pernah digenerate untuk periode ini",
-			karyawan:           &model.Karyawan{ID: karyawanID, GajiPokok: decimal.NewFromInt(4000000)},
+			karyawan:           &model.Karyawan{ID: karyawanID, GajiPokok: decimal.NewFromInt(4000000), Status: model.StatusKaryawanAktif},
 			komponenList:       []model.KomponenGaji{},
 			createErr:          repository.ErrPayrollAlreadyExists,
 			wantErr:            repository.ErrPayrollAlreadyExists,

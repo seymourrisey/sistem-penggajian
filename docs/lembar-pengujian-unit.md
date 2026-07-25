@@ -3,8 +3,8 @@
 - **Kode Test:** `tests/unit/payroll_service_test.go`, `tests/unit/sort_test.go`
 - **Metode:** Table-driven test, Go `testing` package, mock repository (tanpa koneksi database asli)
 - **Command Eksekusi:** `go test ./tests/unit/... -v`
-- **Tanggal Eksekusi Terakhir:** 22 July 2026
-- **Hasil Keseluruhan:** 17/17 skenario PASS
+- **Tanggal Eksekusi Terakhir:** 25 July 2026
+- **Hasil Keseluruhan:** 18/18 skenario PASS
 
 ---
 
@@ -20,8 +20,9 @@ Seluruh skenario menggunakan mock untuk `KaryawanRepository`, `KomponenGajiRepos
 | 4 | is_persen=true murni: hanya satu tunjangan persen | gaji_pokok=1.000.000; tunjangan persen "Jabatan"=10% | total_tunjangan=100.000; total_potongan=0; gaji_bersih=1.100.000 | Sesuai expected | PASS |
 | 5 | is_persen=true dengan nominal 0%: kontribusi harus nol, bukan galat/error | gaji_pokok=1.000.000; tunjangan persen "Insentif Kondisional"=0% | total_tunjangan=0; total_potongan=0; gaji_bersih=1.000.000; tidak ada error/panic | Sesuai expected | PASS |
 | 6 | Karyawan tidak ditemukan: harus short-circuit sebelum transaksi dibuka | `KaryawanRepository.GetByID` mengembalikan `ErrKaryawanNotFound` | error = `ErrKaryawanNotFound`; `PayrollRepository.Create` TIDAK dipanggil; `BeginTx` TIDAK dipanggil | Sesuai expected | PASS |
-| 7 | Repository komponen_gaji gagal: harus short-circuit sebelum transaksi dibuka | karyawan valid (gaji_pokok=5.000.000); `KomponenGajiRepository.GetByKaryawanID` mengembalikan error koneksi | error diteruskan apa adanya; `Create` TIDAK dipanggil; `BeginTx` TIDAK dipanggil | Sesuai expected | PASS |
-| 8 | Payroll duplikat: sudah pernah digenerate untuk kombinasi karyawan+periode yang sama | karyawan valid (gaji_pokok=4.000.000); komponen_gaji=[]; `Create` mengembalikan `ErrPayrollAlreadyExists` | error = `ErrPayrollAlreadyExists`; `Create` DIPANGGIL (transaksi sempat dibuka); `Rollback` dipanggil; `Commit` TIDAK dipanggil | Sesuai expected | PASS |
+| 7 | Karyawan berstatus nonaktif: harus short-circuit sebelum transaksi dibuka | karyawan valid dengan status="nonaktif" | error = `ErrKaryawanTidakAktif`; `PayrollRepository.Create` TIDAK dipanggil; `BeginTx` TIDAK dipanggil | Sesuai expected | PASS |
+| 8 | Repository komponen_gaji gagal: harus short-circuit sebelum transaksi dibuka | karyawan valid (gaji_pokok=5.000.000); `KomponenGajiRepository.GetByKaryawanID` mengembalikan error koneksi | error diteruskan apa adanya; `Create` TIDAK dipanggil; `BeginTx` TIDAK dipanggil | Sesuai expected | PASS |
+| 9 | Payroll duplikat: sudah pernah digenerate untuk kombinasi karyawan+periode yang sama | karyawan valid (gaji_pokok=4.000.000); komponen_gaji=[]; `Create` mengembalikan `ErrPayrollAlreadyExists` | error = `ErrPayrollAlreadyExists`; `Create` DIPANGGIL (transaksi sempat dibuka); `Rollback` dipanggil; `Commit` TIDAK dipanggil | Sesuai expected | PASS |
 
 ---
 
