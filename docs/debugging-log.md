@@ -2,7 +2,7 @@
 
 **Bukti Kompetensi:** #6 — Melakukan Debugging
 **Metode:** Exploratory testing manual via Postman terhadap seluruh endpoint REST API, dilakukan setelah handler + router + wiring selesai
-**Total kasus:** 14 bug ditemukan, 14 bug diperbaiki dan diverifikasi ulang.
+**Total kasus:** 15 bug ditemukan, 15 bug diperbaiki dan diverifikasi ulang.
 
 ---
 
@@ -755,6 +755,121 @@ case errors.Is(err, repository.ErrKaryawanTidakAktif):
 
 ---
 
+## Bug #15 — Komponen Gaji Masih Dapat Ditambah dan Diubah pada Karyawan Nonaktif
+
+### Gejala
+
+Meskipun karyawan telah di-soft delete (status berubah menjadi `nonaktif`), endpoint penambahan dan perubahan komponen gaji masih mengizinkan modifikasi data.
+
+Endpoint yang terdampak:
+
+```http
+POST /api/karyawan/{id}/komponen-gaji
+PUT /api/karyawan/{id}/komponen-gaji/{komponen_id}
+```
+
+Hasil sebelum perbaikan:
+
+**POST**
+
+```text
+[GIN] 2026/07/25 - 20:57:56 | 201 | 4.62ms | ::1 | POST "/api/karyawan/6/komponen-gaji"
+```
+
+**PUT**
+
+```text
+[GIN] 2026/07/25 - 21:43:18 | 200 | 588.4µs | ::1 | PUT "/api/karyawan/61/komponen-gaji/32"
+```
+
+Kedua endpoint masih berhasil memodifikasi data (`HTTP 201 Created` dan `HTTP 200 OK`) meskipun karyawan telah berstatus `nonaktif`.
+
+---
+
+### Analisis Penyebab
+
+Business rule sebelumnya hanya diterapkan pada proses `GeneratePayroll`, yaitu hanya karyawan dengan status `aktif` yang boleh diproses.
+
+Namun validasi tersebut belum diterapkan pada proses penambahan (`POST`) maupun perubahan (`PUT`) komponen gaji. Service langsung melakukan operasi penyimpanan ke database tanpa terlebih dahulu memverifikasi status karyawan.
+
+Akibatnya, data komponen gaji masih dapat ditambah maupun diubah setelah karyawan tidak lagi aktif, sehingga menimbulkan inkonsistensi terhadap aturan bisnis sistem penggajian.
+
+---
+
+### Fix (After)
+
+Perbaikan dilakukan pada layer service dengan menambahkan dependency `KaryawanRepository` ke `komponenGajiService`, sehingga service dapat mengambil data karyawan sebelum melakukan operasi penyimpanan maupun pembaruan data.
+
+Constructor diperbarui menjadi:
+
+```go
+type komponenGajiService struct {
+	repo         repository.KomponenGajiRepository
+	karyawanRepo repository.KaryawanRepository
+}
+
+func NewKomponenGajiService(
+	repo repository.KomponenGajiRepository,
+	karyawanRepo repository.KaryawanRepository,
+) KomponenGajiService {
+	return &komponenGajiService{
+		repo:         repo,
+		karyawanRepo: karyawanRepo,
+	}
+}
+```
+
+Selanjutnya, pada fungsi `Create()` dan `Update()` ditambahkan validasi status karyawan sebelum operasi database dilakukan.
+
+```go
+karyawan, err := s.karyawanRepo.GetByID(ctx, k.KaryawanID)
+if err != nil {
+	return err
+}
+
+if karyawan.Status != model.StatusKaryawanAktif {
+	return repository.ErrKaryawanTidakAktif
+}
+```
+
+Selain itu, `mapKomponenGajiError()` diperbarui agar `repository.ErrKaryawanTidakAktif` dipetakan menjadi **HTTP 400 Bad Request**, bukan `500 Internal Server Error`.
+
+---
+
+### Verifikasi Setelah Perbaikan
+
+#### POST Komponen Gaji
+
+```text
+[GIN] 2026/07/25 - 21:20:30 | 400 | 2.8ms | ::1 | POST "/api/karyawan/6/komponen-gaji"
+```
+
+Response:
+
+```json
+{
+  "error": "karyawan tidak aktif"
+}
+```
+
+#### PUT Komponen Gaji
+
+```text
+[GIN] 2026/07/25 - 21:43:18 | 400 | ... | ::1 | PUT "/api/karyawan/61/komponen-gaji/32"
+```
+
+Response:
+
+```json
+{
+  "error": "karyawan tidak aktif"
+}
+```
+
+Hasil pengujian menunjukkan bahwa business rule kini diterapkan secara konsisten pada seluruh operasi yang memodifikasi data komponen gaji. Baik penambahan (`POST`) maupun pembaruan (`PUT`) hanya dapat dilakukan terhadap karyawan dengan status **aktif**, sedangkan permintaan terhadap karyawan berstatus `nonaktif` akan ditolak dengan **HTTP 400 Bad Request**.
+
+---
+
 ## Ringkasan
 
 | # | Bug | Severity | Status |
@@ -773,5 +888,6 @@ case errors.Is(err, repository.ErrKaryawanTidakAktif):
 | 12 | TRUNCATE ... RESTART IDENTITY Gagal karena Privilege Ownership Sequence | Medium | Fixed & Verified |
 | 13 | Response PUT /api/karyawan/:id Mengembalikan `status` dan `created_at` Kosong | Medium | Fixed & Verified |
 | 14 | Generate Payroll untuk Karyawan Nonaktif Tidak Ditolak | Medium | Fixed & Verified |
+| 15 | Komponen Gaji Masih Dapat Ditambah dan Diubah pada Karyawan Nonaktif | Medium | Fixed & Verified |
 
 Seluruh kasus ditemukan melalui exploratory testing manual (Postman), bukan simulasi/hipotesis, setiap "Before" adalah response aktual yang tercatat, dan setiap "Verifikasi" adalah hasil retest aktual setelah fix diterapkan.
