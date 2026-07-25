@@ -133,7 +133,6 @@ Dependency flow: `handler → service → repository → model`. Layer `handler`
 | GET | `/api/payroll/:karyawan_id/riwayat` | Riwayat payroll karyawan |
 | GET | `/api/payroll/laporan?periode=YYYY-MM-DD` | Laporan agregat payroll per departemen |
 
-Detail lengkap tiap endpoint (query highlight, business rule) ada di `ProjectDesign-SistemPenggajian.md` section 4.
 
 ### Konvensi Format
 - **Tanggal:** `YYYY-MM-DD` (date-only), bukan RFC3339 — konsisten di seluruh request/response.
@@ -142,9 +141,10 @@ Detail lengkap tiap endpoint (query highlight, business rule) ada di `ProjectDes
 ---
 
 ## Dokumentasi Tambahan
-
 | Dokumen | Isi |
 |---|---|
+| `docs/erd.png` | Entity Relationship Diagram — kardinalitas relasi antar entitas |
+| `docs/lrs.png` | Logical Record Structure — struktur tabel fisik, FK, tipe data |
 | `docs/skalabilitas.md` | Analisis skalabilitas, index strategy, connection pooling |
 | `docs/code-review-checklist.md` | Checklist review, temuan, pengecualian desain disengaja |
 | `docs/debugging-log.md` | 13 kasus bug — gejala, root cause, fix, verifikasi; termasuk verifikasi tambahan pakai Delve untuk 2 kasus terpilih |
@@ -152,7 +152,6 @@ Detail lengkap tiap endpoint (query highlight, business rule) ada di `ProjectDes
 | `docs/lembar-pengujian-unit.md` | Dokumen formal pengujian unit |
 | `docs/lembar-pengujian-integrasi.md` | Dokumen formal pengujian integrasi |
 | `docs/data-provenance.md` | Proses analisis & transformasi dataset publik → skema |
-
 ---
 
 ## Environment Variables (`.env`)
