@@ -1,7 +1,9 @@
 # Project Design — Sistem Informasi Penggajian
 
 **Studi Kasus:** Analis Sistem — Rancang & Implementasi Aplikasi Perangkat Lunak
+
 **Tech Stack:** Golang (Gin), PostgreSQL (pgAdmin4), Layered Architecture
+
 **Tujuan:** Bukti kompetensi 10 unit skema SKKNI (J.620100.xxx)
 
 ---
