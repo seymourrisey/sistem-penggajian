@@ -200,6 +200,7 @@ func TestGeneratePayroll(t *testing.T) {
 		}
 	})
 
+	// Test: format_periode_salah_400
 	t.Run("format_periode_salah_400", func(t *testing.T) {
 		// Setup: buat karyawan aktif.
 		createBody := map[string]interface{}{

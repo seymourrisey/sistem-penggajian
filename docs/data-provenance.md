@@ -10,10 +10,23 @@ dan arahan asesor untuk mempelajari sifat-sifat data publik vs privat sebelum di
 ## 1. Sumber Data
 
 **Nama dataset:** Employee Salary Dataset
+
 **Sumber:** Kaggle — [prince7489/employee-salary-dataset](https://www.kaggle.com/datasets/prince7489/employee-salary-dataset)
+
 **Sifat:** Data publik
+
 **Jumlah baris:** 50
-**Kolom asli:** `EmployeeID`, `Name`, `Department`, `Experience_Years`, `Education_Level`, `Age`, `Gender`, `City`, `Monthly_Salary`
+
+**Kolom asli:** 
+- `EmployeeID`, 
+- `Name`, 
+- `Department`, 
+- `Experience_Years`, 
+- `Education_Level`, 
+- `Age`, 
+- `Gender`, 
+- `City`, 
+- `Monthly_Salary`
 
 ### 1.1 Riwayat Pemilihan Dataset
 

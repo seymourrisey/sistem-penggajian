@@ -104,6 +104,7 @@ func TestGetKomponenGajiByID(t *testing.T) {
 		}
 	})
 
+	// Test: komponen_tidak_ditemukan
 	t.Run("komponen_tidak_ditemukan_404", func(t *testing.T) {
 
 		// Gunakan ID yang dipastikan tidak ada.
@@ -127,6 +128,7 @@ func TestGetKomponenGajiByID(t *testing.T) {
 		}
 	})
 
+	// Test: id bukan angka
 	t.Run("id_bukan_angka_400", func(t *testing.T) {
 
 		req := httptest.NewRequest(

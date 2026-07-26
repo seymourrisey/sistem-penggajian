@@ -143,8 +143,9 @@ Dependency flow: `handler → service → repository → model`. Layer `handler`
 ## Dokumentasi Tambahan
 | Dokumen | Isi |
 |---|---|
-| `docs/erd.png` | Entity Relationship Diagram — kardinalitas relasi antar entitas |
-| `docs/lrs.png` | Logical Record Structure — struktur tabel fisik, FK, tipe data |
+| `docs/diagram-erd.png` | Entity Relationship Diagram — kardinalitas relasi antar entitas |
+| `docs/diagram-lrs.png` | Logical Record Structure — struktur tabel fisik, FK, tipe data |
+| `docs/diagram-class.png` | Class Diagram — struktur kelas dan relasi antar kelas |
 | `docs/skalabilitas.md` | Analisis skalabilitas, index strategy, connection pooling |
 | `docs/code-review-checklist.md` | Checklist review, temuan, pengecualian desain disengaja |
 | `docs/debugging-log.md` | 13 kasus bug — gejala, root cause, fix, verifikasi; termasuk verifikasi tambahan pakai Delve untuk 2 kasus terpilih |

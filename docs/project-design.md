@@ -40,6 +40,15 @@
 
 ## 2. Database Design
 
+### Entity Relationship Diagram
+![Entity Relationship Diagram](/docs/diagram-erd.png)
+
+### Logical Record Structure
+![Logical Record Structure](/docs/diagram-lrs.png)
+
+### Class Diagram
+![Class Diagram](/docs/diagram-class.png)
+
 ### 2.1 Schema
 
 ```sql
@@ -102,11 +111,9 @@ CREATE INDEX idx_komponen_karyawan ON komponen_gaji(karyawan_id);
 - **Departemen menggunakan hard-delete, karyawan menggunakan soft-delete** — perbedaan ini disengaja, bukan inkonsistensi. Departemen adalah master data organisasi murni tanpa histori transaksional yang melekat langsung padanya (sekadar label pengelompokan), sehingga dapat dihapus permanen jika belum/tidak lagi direferensikan karyawan. Karyawan sebaliknya terhubung ke riwayat payroll yang harus tetap dapat ditelusuri (audit trail), sehingga statusnya hanya dinonaktifkan, tidak dihapus. Integritas data departemen tetap terjaga melalui foreign key constraint pada tabel `karyawan` — departemen yang masih direferensikan tidak dapat dihapus dan database akan mengembalikan error.
 
 ### 2.3 Entity Relationship
-```
-departemen (1) ──< (N) karyawan (1) ──< (N) komponen_gaji
-                          │
-                          └──< (N) payroll
-```
+
+![Entity Relationship Diagram](docs/entity-relationship-diagram.png)
+
 
 ### 2.4 Fitur SQL Native (Stored Procedure, Function, Trigger, View, Transaksi)
 
