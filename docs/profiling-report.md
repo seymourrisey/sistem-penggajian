@@ -3,6 +3,7 @@
 - **Tools:** `net/http/pprof` (CPU & heap profile), `go tool pprof`, `EXPLAIN ANALYZE` (PostgreSQL), `go test -bench` (benchmark kompleksitas algoritma)
 - **Database:** `payroll_profiling_db` (terisolasi dari `payroll_db`/`payroll_test_db`), data sintetis 5.000 karyawan / 15.000 payroll (3 periode)
 - **Environment eksekusi:** Dell Latitude 7280, Intel(R) Core(TM) i7-7600U CPU @ 2.80GHz, Windows 10 Build 19045. 
+
 Angka absolut (ns/op, ms) bersifat kontekstual terhadap hardware ini, bukan diklaim setara server produksi - yang jadi bukti utama adalah **pola relatif** (rasio before/after, rasio pertumbuhan terhadap N), yang tidak bergantung pada hardware spesifik.
 
 Laporan ini mencakup 3 dimensi profiling: **waktu eksekusi** (CPU profile, 2 kasus dengan selektivitas berbeda), **penggunaan memory** (heap profile, 2 endpoint yang sama), dan **kompleksitas algoritma** (benchmark empiris terhadap sorting manual).
