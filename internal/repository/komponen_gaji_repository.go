@@ -110,7 +110,8 @@ func (r *komponenGajiRepository) GetByKaryawanID(ctx context.Context, karyawanID
 	}
 	defer rows.Close()
 
-	var result []model.KomponenGaji
+	result := make([]model.KomponenGaji, 0)
+
 	for rows.Next() {
 		var k model.KomponenGaji
 		if err := rows.Scan(
