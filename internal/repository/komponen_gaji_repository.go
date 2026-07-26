@@ -21,6 +21,10 @@ var ErrKomponenGajiNotFound = errors.New("komponen gaji tidak ditemukan")
 // komponen_gaji.karyawan_id -> karyawan.id).
 var ErrKaryawanTidakValid = errors.New("karyawan_id tidak valid atau tidak ditemukan")
 
+// ErrNominalNegatif dikembalikan ketika nominal yang dirujuk tidak
+// valid (nominal tidak boleh negatif).
+var ErrNominalNegatif = errors.New("nominal tidak boleh negatif")
+
 // ErrKomponenGajiDuplikat dikembalikan ketika kombinasi karyawan_id, jenis,
 // dan nama sudah ada (mapping dari pelanggaran UNIQUE constraint
 // uq_komponen_gaji_karyawan_jenis_nama).
@@ -145,7 +149,10 @@ func (r *komponenGajiRepository) Update(ctx context.Context, k *model.KomponenGa
 		k.KaryawanID,
 	)
 	if err != nil {
-		return err
+		if mapped := mapKomponenGajiPgError(err); mapped != nil {
+			return mapped
+		}
+		return fmt.Errorf("gagal membuat komponen gaji untuk karyawan_id=%d: %w", k.KaryawanID, err)
 	}
 
 	if tag.RowsAffected() == 0 {
@@ -156,7 +163,6 @@ func (r *komponenGajiRepository) Update(ctx context.Context, k *model.KomponenGa
 }
 
 // // Delete menghapus permanen record komponen_gaji (hard delete — tabel ini
-// // tidak memiliki kolom status, konsisten dengan pola departemen_repository).
 // func (r *komponenGajiRepository) Delete(ctx context.Context, id int) error {
 // 	query := `DELETE FROM komponen_gaji WHERE id = $1`
 

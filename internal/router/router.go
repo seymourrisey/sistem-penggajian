@@ -1,6 +1,9 @@
 package router
 
 import (
+	"time"
+
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
 	"github.com/seymourrisey/sistem-penggajian/internal/handler"
@@ -16,6 +19,13 @@ func NewRouter(
 	payrollHandler *handler.PayrollHandler,
 ) *gin.Engine {
 	r := gin.Default()
+
+	r.Use(cors.New(cors.Config{
+		AllowOrigins: []string{"*"},
+		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders: []string{"Origin", "Content-Type", "Authorization"},
+		MaxAge:       12 * time.Hour,
+	}))
 
 	api := r.Group("/api")
 	{

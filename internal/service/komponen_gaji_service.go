@@ -54,9 +54,13 @@ func (s *komponenGajiService) Create(ctx context.Context, k *model.KomponenGaji)
 		return ErrJenisKomponenTidakValid
 	}
 
+	if k.Nominal.IsNegative() {
+		return repository.ErrNominalNegatif
+	}
+
 	karyawan, err := s.karyawanRepo.GetByID(ctx, k.KaryawanID)
 	if err != nil {
-		return err
+		return repository.ErrKaryawanTidakValid
 	}
 	// check status karyawan. status=nonaktif TOLAK
 	if karyawan.Status != model.StatusKaryawanAktif {
@@ -90,9 +94,13 @@ func (s *komponenGajiService) Update(ctx context.Context, k *model.KomponenGaji)
 		return ErrJenisKomponenTidakValid
 	}
 
+	if k.Nominal.IsNegative() {
+		return repository.ErrNominalNegatif
+	}
+
 	karyawan, err := s.karyawanRepo.GetByID(ctx, k.KaryawanID)
 	if err != nil {
-		return err
+		return repository.ErrKaryawanTidakValid
 	}
 	// check status karyawan. status=nonaktif TOLAK
 	if karyawan.Status != model.StatusKaryawanAktif {

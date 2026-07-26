@@ -216,6 +216,7 @@ func TestCreateKomponenGaji(t *testing.T) {
 		}
 	})
 
+	// Test: jenis tidak valid
 	t.Run("jenis_tidak_valid_400", func(t *testing.T) {
 		// Setup: karyawan aktif.
 		createBody := map[string]interface{}{
@@ -270,6 +271,125 @@ func TestCreateKomponenGaji(t *testing.T) {
 
 		if count != 0 {
 			t.Errorf("expected 0 row inserted, got %d", count)
+		}
+	})
+
+	// Test: nominal negatif
+	t.Run("nominal_negatif_400", func(t *testing.T) {
+		// Setup: karyawan aktif.
+		createBody := map[string]interface{}{
+			"nip":           "TKGCREATE-005",
+			"nama":          "Dewi Anggraini",
+			"departemen_id": seedDepartemenITID,
+			"jabatan":       "Staff",
+			"gaji_pokok":    4500000,
+			"tanggal_masuk": "2024-03-01",
+		}
+
+		createRec := doCreateKaryawanRequest(t, createBody)
+		if createRec.Code != http.StatusCreated {
+			t.Fatalf("setup: create karyawan harus 201, got %d, body: %s",
+				createRec.Code, createRec.Body.String())
+		}
+
+		karyawanID := extractIDFromResponse(t, createRec)
+
+		body := map[string]interface{}{
+			"jenis":     "tunjangan",
+			"nama":      "Bonus Tahunan",
+			"nominal":   -9100, // nominal negatif
+			"is_persen": false,
+		}
+
+		rec := doCreateKomponenGajiRequest(t, karyawanID, body)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected status 400, got %d, body: %s",
+				rec.Code, rec.Body.String())
+		}
+
+		var resp map[string]interface{}
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("gagal decode response: %v", err)
+		}
+
+		if resp["error"] != "nominal tidak boleh negatif" {
+			t.Errorf("unexpected error message: %v", resp["error"])
+		}
+
+		var count int
+		err := testPool.QueryRow(
+			context.Background(),
+			`SELECT COUNT(*) FROM komponen_gaji WHERE karyawan_id=$1`,
+			karyawanID,
+		).Scan(&count)
+		if err != nil {
+			t.Fatalf("gagal query database: %v", err)
+		}
+
+		if count != 0 {
+			t.Errorf("expected 0 row inserted, got %d", count)
+		}
+	})
+
+	// Test: karyawan tidak ditemukan.
+	t.Run("karyawan_tidak_ditemukan_404", func(t *testing.T) {
+		body := map[string]interface{}{
+			"jenis":     "tunjangan",
+			"nama":      "Tunjangan Transport",
+			"nominal":   500000,
+			"is_persen": false,
+		}
+
+		// Verifikasi jumlah data sebelum request.
+		var before int
+		err := testPool.QueryRow(
+			context.Background(),
+			`SELECT COUNT(*) FROM komponen_gaji`,
+		).Scan(&before)
+
+		if err != nil {
+			t.Fatalf("gagal query database: %v", err)
+		}
+
+		rec := doCreateKomponenGajiRequest(t, 999999, body)
+
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("expected status 404, got %d, body: %s",
+				rec.Code,
+				rec.Body.String())
+		}
+
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("expected status 404, got %d, body: %s",
+				rec.Code,
+				rec.Body.String())
+		}
+
+		var resp map[string]interface{}
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("gagal decode response: %v", err)
+		}
+
+		if resp["error"] != "karyawan_id tidak valid atau tidak ditemukan" {
+			t.Errorf("expected error 'karyawan_id tidak valid atau tidak ditemukan', got %v",
+				resp["error"])
+		}
+
+		// Verifikasi jumlah data setelah request.
+		var after int
+		err = testPool.QueryRow(
+			context.Background(),
+			`SELECT COUNT(*) FROM komponen_gaji`,
+		).Scan(&after)
+
+		if err != nil {
+			t.Fatalf("gagal query database: %v", err)
+		}
+
+		if after != before {
+			t.Errorf("expected no new rows, before=%d after=%d",
+				before, after)
 		}
 	})
 

@@ -151,7 +151,7 @@ func (h *KomponenGajiHandler) GetByID(c *gin.Context) {
 func mapKomponenGajiError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, repository.ErrKaryawanTidakValid):
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 	case errors.Is(err, repository.ErrKomponenGajiDuplikat):
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 	case errors.Is(err, repository.ErrKomponenGajiNotFound):
@@ -160,6 +160,8 @@ func mapKomponenGajiError(c *gin.Context, err error) {
 		errors.Is(err, service.ErrJenisKomponenTidakValid):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	case errors.Is(err, repository.ErrKaryawanTidakAktif):
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	case errors.Is(err, repository.ErrNominalNegatif):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	default:
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

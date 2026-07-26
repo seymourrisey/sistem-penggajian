@@ -199,6 +199,77 @@ func TestGeneratePayroll(t *testing.T) {
 			t.Errorf("expected 0 payroll row (request ditolak sebelum insert), got %d", count)
 		}
 	})
+
+	t.Run("format_periode_salah_400", func(t *testing.T) {
+		// Setup: buat karyawan aktif.
+		createBody := map[string]interface{}{
+			"nip":           "TPG-FORMAT-001",
+			"nama":          "Budi Santoso",
+			"departemen_id": seedDepartemenITID,
+			"jabatan":       "Staff",
+			"gaji_pokok":    5000000,
+			"tanggal_masuk": "2023-01-10",
+		}
+
+		createRec := doCreateKaryawanRequest(t, createBody)
+		if createRec.Code != http.StatusCreated {
+			t.Fatalf("setup: create karyawan harus 201, got %d, body: %s",
+				createRec.Code,
+				createRec.Body.String())
+		}
+
+		karyawanID := extractIDFromResponse(t, createRec)
+
+		// Verifikasi jumlah payroll sebelum request.
+		var before int
+		err := testPool.QueryRow(
+			context.Background(),
+			`SELECT COUNT(*) FROM payroll`,
+		).Scan(&before)
+
+		if err != nil {
+			t.Fatalf("gagal query database: %v", err)
+		}
+
+		generateBody := map[string]interface{}{
+			"karyawan_id": karyawanID,
+			"periode":     "<a.981", // format yang salah
+		}
+
+		rec := doGeneratePayrollRequest(t, generateBody)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected status 400, got %d, body: %s",
+				rec.Code,
+				rec.Body.String())
+		}
+
+		var resp map[string]interface{}
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("gagal decode response: %v", err)
+		}
+
+		if resp["error"] != "periode harus format YYYY-MM-DD" {
+			t.Errorf("expected error 'periode harus format YYYY-MM-DD', got %v",
+				resp["error"])
+		}
+
+		// Verifikasi tidak ada payroll baru.
+		var after int
+		err = testPool.QueryRow(
+			context.Background(),
+			`SELECT COUNT(*) FROM payroll`,
+		).Scan(&after)
+
+		if err != nil {
+			t.Fatalf("gagal query database: %v", err)
+		}
+
+		if after != before {
+			t.Errorf("expected no new payroll row, before=%d after=%d",
+				before, after)
+		}
+	})
 }
 
 // doCreateKomponenGajiRequest adalah helper untuk mengirim

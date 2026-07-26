@@ -66,7 +66,7 @@ func (s *payrollService) GeneratePayroll(ctx context.Context, karyawanID int, pe
 	if err != nil {
 		return nil, err
 	}
-
+	// check status karyawan. jika status=nonaktif TIDAK BISA
 	if karyawan.Status != model.StatusKaryawanAktif {
 		return nil, repository.ErrKaryawanTidakAktif
 	}
