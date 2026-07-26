@@ -90,7 +90,9 @@ func (r *departemenRepository) GetAll(ctx context.Context) ([]model.Departemen, 
 		return nil, fmt.Errorf("gagal ambil daftar departemen: %w", err)
 	}
 	defer rows.Close()
-	var result []model.Departemen
+
+	result := make([]model.Departemen, 0)
+
 	for rows.Next() {
 		var d model.Departemen
 		if err := rows.Scan(&d.ID, &d.Nama, &d.CreatedAt); err != nil {
