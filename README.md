@@ -2,7 +2,7 @@
 
 REST API sistem penggajian berbasis web. Mencakup CRUD karyawan/departemen, pengelolaan komponen gaji (tunjangan/potongan), generate slip gaji per periode, riwayat gaji, dan laporan agregat per departemen.
 
-Detail rancangan lengkap (requirements, skema database, justifikasi desain) ada di `docs/project-design.md`.
+Detail rancangan lengkap (requirements, skema database, justifikasi desain) ada di [`docs/project-design.md`](docs/project-design.md).
 
 Frontend web tampilan untuk integrasi pada repository https://github.com/seymourrisey/sistem-penggajian-web
 
@@ -45,7 +45,7 @@ Aplikasi **tidak** menggunakan user `postgres` (superuser). Buat database dulu, 
 psql -U postgres -c "CREATE DATABASE payroll_db;"
 psql -U postgres -d payroll_db -f migrations/setup-db-user-privilege-terbatas.sql
 ```
-Script ini membuat user `payroll_app` dan meng-grant `SELECT, INSERT, UPDATE, DELETE` pada schema aplikasi — tanpa `DROP`/`CREATE`, sesuai prinsip least privilege (lihat `docs/project-design.md` section 2.4) dengan catatan mohon di edit `setup-db-user-privilege-terbatas.sql` pada bagian ```LOGIN PASSWORD 'ganti_password_kuat_disini'```.
+Script ini membuat user `payroll_app` dan meng-grant `SELECT, INSERT, UPDATE, DELETE` pada schema aplikasi — tanpa `DROP`/`CREATE`, sesuai prinsip least privilege (lihat [`docs/project-design.md`](docs/project-design.md). section 2.4) dengan catatan mohon di edit `setup-db-user-privilege-terbatas.sql` pada bagian ```LOGIN PASSWORD 'ganti_password_kuat_disini'```.
 
 ### 3. Jalankan Migration (urutan wajib berurutan)
 ```bash
@@ -55,7 +55,7 @@ psql -U postgres -d payroll_db -f migrations/seed.sql
 ```
 - `001_init_schema.sql` — DDL struktural (tabel, index, constraint).
 - `002_sql_native_features.sql` — function, trigger, view, stored procedure (bergantung pada skema di `001`, wajib dijalankan setelahnya).
-- `seed.sql` — data uji (kombinasi dataset publik + data sintetis, lihat `docs/data-provenance.md` untuk detail provenance).
+- `seed.sql` — data uji (kombinasi dataset publik + data sintetis, lihat [`docs/data-provenance.md`](docs/data-provenance.md) untuk detail provenance).
 
 ---
 

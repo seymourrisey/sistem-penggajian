@@ -1,7 +1,7 @@
 # Project Design — Sistem Informasi Penggajian
 
 **Studi Kasus:** Analis Sistem — Rancang & Implementasi Aplikasi Perangkat Lunak
-**Tech Stack:** Golang (Gin), PostgreSQL (pgAdmin4), Clean/Layered Architecture
+**Tech Stack:** Golang (Gin), PostgreSQL (pgAdmin4), Layered Architecture
 **Tujuan:** Bukti kompetensi 10 unit skema SKKNI (J.620100.xxx)
 
 ---
@@ -39,15 +39,6 @@
 ---
 
 ## 2. Database Design
-
-### Entity Relationship Diagram
-![Entity Relationship Diagram](/docs/diagram-erd.png)
-
-### Logical Record Structure
-![Logical Record Structure](/docs/diagram-lrs.png)
-
-### Class Diagram
-![Class Diagram](/docs/diagram-class.png)
 
 ### 2.1 Schema
 
@@ -110,10 +101,16 @@ CREATE INDEX idx_komponen_karyawan ON komponen_gaji(karyawan_id);
 - **decimal.Decimal untuk nilai uang**: dipilih agar perhitungan nominal tetap presisi (menghindari error floating point) sekaligus mendukung binding JSON numerik secara langsung tanpa perlu workaround parsing string manual.
 - **Departemen menggunakan hard-delete, karyawan menggunakan soft-delete** — perbedaan ini disengaja, bukan inkonsistensi. Departemen adalah master data organisasi murni tanpa histori transaksional yang melekat langsung padanya (sekadar label pengelompokan), sehingga dapat dihapus permanen jika belum/tidak lagi direferensikan karyawan. Karyawan sebaliknya terhubung ke riwayat payroll yang harus tetap dapat ditelusuri (audit trail), sehingga statusnya hanya dinonaktifkan, tidak dihapus. Integritas data departemen tetap terjaga melalui foreign key constraint pada tabel `karyawan` — departemen yang masih direferensikan tidak dapat dihapus dan database akan mengembalikan error.
 
-### 2.3 Entity Relationship
+### 2.3 Diagram
 
-![Entity Relationship Diagram](docs/entity-relationship-diagram.png)
+### Entity Relationship Diagram
+![Entity Relationship Diagram](/docs/diagram-erd.png)
 
+### Logical Record Structure
+![Logical Record Structure](/docs/diagram-lrs.png)
+
+### Class Diagram
+![Class Diagram](/docs/diagram-class.png)
 
 ### 2.4 Fitur SQL Native (Stored Procedure, Function, Trigger, View, Transaksi)
 
