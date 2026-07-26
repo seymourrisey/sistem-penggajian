@@ -149,7 +149,7 @@ Dependency flow: `handler → service → repository → model`. Layer `handler`
 | `docs/lrs.png` | Logical Record Structure — struktur tabel fisik, FK, tipe data |
 | `docs/skalabilitas.md` | Analisis skalabilitas, index strategy, connection pooling |
 | `docs/code-review-checklist.md` | Checklist review, temuan, pengecualian desain disengaja |
-| `docs/debugging-log.md` | 13 kasus bug — gejala, root cause, fix, verifikasi; termasuk verifikasi tambahan pakai Delve untuk 2 kasus terpilih |
+| `docs/debugging-log.md` | 15 kasus bug — gejala, root cause, fix, verifikasi; termasuk verifikasi tambahan pakai Delve untuk 2 kasus terpilih |
 | `docs/profiling-report.md` | Hasil `pprof`, perbandingan before/after optimasi |
 | `docs/lembar-pengujian-unit.md` | Dokumen formal pengujian unit |
 | `docs/lembar-pengujian-integrasi.md` | Dokumen formal pengujian integrasi |
@@ -165,7 +165,7 @@ Dependency flow: `handler → service → repository → model`. Layer `handler`
 | `DB_PORT` | Port PostgreSQL | `5432` |
 | `DB_NAME` | Nama database utama | `payroll_db` |
 | `DB_USER` | Username database (bukan superuser) | `payroll_app` |
-| `DB_PASSWORD` | Password user database | — |
+| `DB_PASSWORD` | Password user database | `password-anda` |
 
 Lihat `.env.example` untuk daftar lengkap & nilai default aktual.
 
