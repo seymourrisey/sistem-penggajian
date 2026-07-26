@@ -1,4 +1,4 @@
-# Project Design — Sistem Informasi Penggajian
+# Project Design — Sistem Penggajian
 
 **Studi Kasus:** Analis Sistem — Rancang & Implementasi Aplikasi Perangkat Lunak
 
