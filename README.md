@@ -4,7 +4,7 @@ REST API sistem penggajian berbasis web. Mencakup CRUD karyawan/departemen, peng
 
 Detail rancangan lengkap (requirements, skema database, justifikasi desain, mapping kompetensi) ada di `docs/project-design.md`.
 
-Frontend tampilan integrasi pada repository https://github.com/seymourrisey/sistem-penggajian-web
+Frontend web tampilan untuk integrasi pada repository https://github.com/seymourrisey/sistem-penggajian-web
 
 ---
 
