@@ -57,7 +57,7 @@ Kategori 5: `payroll_service.go` bergantung pada `repository.PayrollRepository` 
 
 Format: **Temuan → Dampak → Rekomendasi → Status**.
 
-### Temuan #1 — Severity: Low → ✅ Fixed
+### Temuan #1 — Severity: Low - Fixed 
 - **Kategori:** Error Handling
 - **Lokasi:** `komponen_gaji_repository.go` (`GetByID`, `GetByKaryawanID`, `Update`), `payroll_repository.go` (`GetRiwayatByKaryawanID`, `GetLaporanAgregat`)
 - **Temuan:** `departemen_repository.go`/`karyawan_repository.go` membungkus error non-mapped dengan `fmt.Errorf("gagal ...: %w", err)`; method-method di atas sebagian besar `return err`/`return nil, err` tanpa wrapping.
@@ -67,28 +67,28 @@ Format: **Temuan → Dampak → Rekomendasi → Status**.
   - `komponen_gaji_repository.go Update`: pesan diperbaiki dari `"gagal membuat komponen gaji..."` → `"gagal update komponen gaji..."`.
   - `komponen_gaji_repository.go GetByID`/`GetByKaryawanID`, `payroll_repository.go GetRiwayatByKaryawanID`/`GetLaporanAgregat`: seluruh `return nil, err` generik dibungkus `fmt.Errorf("gagal ...: %w", err)`, konsisten dengan pola di `departemen_repository.go`/`karyawan_repository.go`. Sentinel error yang sudah ada (`ErrKomponenGajiNotFound`, dst.) tetap dikembalikan apa adanya, tidak dibungkus.
 
-### Temuan #2 — Severity: Low → ✅ Fixed
+### Temuan #2 — Severity: Low - Fixed
 - **Kategori:** Konsistensi Struct/DTO
 - **Lokasi:** `komponen_gaji_handler.go`
 - **Temuan (diperluas dari draft awal):** Draft pertama hanya menyebut `Create` dan `Update` yang mengembalikan `model.KomponenGaji` mentah lewat `c.JSON`. Setelah dicek ulang, **seluruh 4 endpoint** di file ini (`Create`, `Update`, `GetByID`, `GetByKaryawanID`) mengembalikan model mentah — bukan cuma 2. `karyawan_handler.go`/`payroll_handler.go` selalu memetakan ke DTO response terpisah.
 - **Dampak:** API contract tidak konsisten antar entitas; perubahan struktur `model.KomponenGaji` di masa depan bisa langsung mengubah response tanpa lapisan pemetaan eksplisit.
 - **Fix:** Ditambahkan `komponenGajiResponse`, `newKomponenGajiResponse`, dan `listKomponenGajiResponse`. Keempat endpoint diubah untuk mengembalikan DTO ini, konsisten dengan pola `karyawan_handler.go`.
 
-### Temuan #3 — Severity: Low → ✅ Fixed
+### Temuan #3 — Severity: Low - Fixed
 - **Kategori:** Konsistensi Struct/DTO
 - **Lokasi:** `departemen_handler.go`
 - **Temuan:** `Update` hanya mengembalikan `{"message": "..."}`, tidak mengembalikan data hasil — berbeda dari `Karyawan.Update`. (`Create`/`GetByID`/`GetAll` mengembalikan `model.Departemen` mentah, tidak masuk kategori masalah karena struktur model sederhana dan memang idealnya ditampilkan apa adanya. `Delete` sengaja tetap `{"message": "..."}` karena tidak ada data tersisa untuk dikembalikan — bukan bagian dari temuan ini.)
 - **Dampak:** Client tidak tahu nilai final tanpa melakukan GET ulang setelah `Update`.
 - **Fix:** `departemen_repository.go Update()` diubah dari `Exec` menjadi `QueryRow(...).Scan(&d.CreatedAt)` dengan `RETURNING created_at`, ditambah pengecekan `pgx.ErrNoRows` → `ErrDepartemenNotFound`. Handler `Update` sekarang mengembalikan `c.JSON(http.StatusOK, dept)`, konsisten dengan `Karyawan.Update`. Frontend (`api.js`) tidak terdampak selama tidak membaca `res.data.message` secara spesifik.
 
-### Temuan #4 — Severity: Low → ✅ Fixed
+### Temuan #4 — Severity: Low - Fixed
 - **Kategori:** Error Handling
 - **Lokasi:** `payroll_repository.go`
 - **Temuan:** Pesan `ErrPayrollAlreadyExists` memakai tanda seru ("...periode ini!"), beda gaya dari sentinel error lain yang tidak pakai tanda baca penekanan.
 - **Dampak:** Inkonsistensi gaya pesan error, murni kosmetik, tidak berpengaruh pada logic atau parsing.
 - **Fix:** Tanda seru dihapus → `"payroll sudah ada untuk karyawan dan periode ini"`.
 
-### Temuan #5 — Severity: Medium → ✅ Diverifikasi, aman
+### Temuan #5 — Severity: Medium - Diverifikasi, aman
 - **Kategori:** Error Handling / Validasi
 - **Lokasi:** `karyawan_handler.go`, `komponen_gaji_handler.go`
 - **Temuan:** `binding:"required"` pada field `decimal.Decimal` (`GajiPokok`, `Nominal`) belum diverifikasi eksplisit apakah menolak nilai `0`.
@@ -98,7 +98,7 @@ Format: **Temuan → Dampak → Rekomendasi → Status**.
 - **Dampak:** Tidak ada risiko fungsional. Kesalahpahaman awal (menyamakan perilaku `gaji_pokok` dan `nominal`) diperbaiki di catatan ini agar tidak disalahartikan assessor sebagai inkonsistensi validasi antar-field.
 - **Rekomendasi:** Tidak ada tindakan lebih lanjut diperlukan.
 
-### Temuan #6 — Severity: Low → ✅ Fixed (baru, ditemukan lewat cross-check)
+### Temuan #6 — Severity: Low → Fixed (baru, ditemukan lewat cross-check)
 - **Kategori:** Error Handling
 - **Lokasi:** `payroll_repository.go` `Create()`
 - **Temuan:** Gap yang terlewat pada review awal (section 2 draft pertama tidak menyebutkan method ini sama sekali, walau pola masalahnya identik dengan Temuan #1). Branch generic error pada `Create()` melakukan `return err` tanpa wrapping, hanya branch pelanggaran unique constraint (`23505` → `ErrPayrollAlreadyExists`) yang ditangani secara eksplisit.
