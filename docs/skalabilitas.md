@@ -1,10 +1,10 @@
-# Analisis Skalabilitas — Sistem Informasi Penggajian
+# Analisis Skalabilitas — Sistem Penggajian
 
 ## 1. Lingkup Sistem & Lingkungan Operasi
 
-**Lingkup data riil:** Dataset seed (`migrations/seed.sql`) berisi **50 baris karyawan**, diambil dan ditransformasi dari dataset publik Kaggle *Employee Salary Dataset* (lihat `project-design.md` section 4.3). Ini adalah skala data aktual proyek untuk keperluan uji kompetensi — bukan skala production riil.
+**Lingkup data riil:** Dataset seed (`migrations/seed.sql`) berisi **50 baris karyawan**, diambil dan ditransformasi dari dataset publik Kaggle *Employee Salary Dataset* (lihat [`project-design.md`](project-design.md) section 4.3). Ini adalah skala data aktual proyek untuk keperluan uji kompetensi — bukan skala production riil.
 
-**Skenario stress-test:** Untuk membuktikan pemahaman terhadap *pola* skalabilitas (bukan sekadar klaim teoretis), pengujian performa (`docs/profiling-report.md`) dilakukan pada database terpisah (`payroll_profiling_db`) dengan data sintetis yang diperbesar ke **5.000 karyawan / 15.000 baris payroll (3 periode)**. Ini proyeksi disengaja untuk mensimulasikan pertumbuhan data ~100x dari seed asli, agar analisis index dan bottleneck punya dasar empiris, bukan asumsi kosong.
+**Skenario stress-test:** Untuk membuktikan pemahaman terhadap *pola* skalabilitas (bukan sekadar klaim teoretis), pengujian performa ([`docs/profiling-report.md`](profiling-report.md)) dilakukan pada database terpisah (`payroll_profiling_db`) dengan data sintetis yang diperbesar ke **5.000 karyawan / 15.000 baris payroll (3 periode)**. Ini proyeksi disengaja untuk mensimulasikan pertumbuhan data ~100x dari seed asli, agar analisis index dan bottleneck punya dasar empiris, bukan asumsi kosong.
 
 **Lingkungan operasi:** Target deployment production **belum ditentukan** — proyek ini bersifat studi kasus/uji kompetensi, bukan sistem yang sudah punya kontrak infrastruktur nyata. Analisis kebutuhan perangkat keras di bagian 3 karena itu bersifat **estimasi hipotetis** berbasis pola beban yang teramati saat profiling (dilakukan di laptop dev: Intel i7-7600U @ 2.80GHz, Windows), bukan rekomendasi final untuk server tertentu.
 
@@ -12,7 +12,7 @@
 
 ## 2. Analisis Kompleksitas vs Jumlah Data
 
-Dua pola berbeda ditemukan tergantung selektivitas filter query (bukti: `profiling-report.md` §1):
+Dua pola berbeda ditemukan tergantung selektivitas filter query (bukti: [`profiling-report.md`](profiling-report.md) pada section 1):
 
 | Pola Query | Contoh Endpoint | Selektivitas | Perilaku saat Data Bertambah |
 |---|---|---|---|
@@ -21,26 +21,30 @@ Dua pola berbeda ditemukan tergantung selektivitas filter query (bukti: `profili
 
 **Implikasi untuk pertumbuhan data:** Endpoint riwayat (per-karyawan) akan tetap cepat berapa pun jumlah karyawan bertambah, karena filternya selalu tunggal. Endpoint laporan (agregat per periode) akan makin lambat seiring jumlah baris payroll per periode bertambah (linear terhadap jumlah karyawan aktif) — ini yang paling perlu dipantau saat data riil tumbuh jauh melebihi 50 baris seed.
 
-**Algoritma sorting manual** (`internal/util/sort.go`) terbukti O(n²) empiris (`profiling-report.md` §3), namun dampaknya diabaikan pada skala realistis sistem ini (komponen gaji per karyawan biasanya belasan baris, bukan ribuan) — tidak jadi perhatian skalabilitas prioritas.
+**Algoritma sorting manual** (`internal/util/sort.go`) terbukti O(n²) empiris (`profiling-report.md` section 3), namun dampaknya diabaikan pada skala realistis sistem ini (komponen gaji per karyawan biasanya belasan baris, bukan ribuan) — tidak jadi perhatian skalabilitas prioritas.
 
 ---
 
 ## 3. Kebutuhan Perangkat Keras (Estimasi Hipotetis)
 
-Karena target deployment belum ditentukan (bagian 1), estimasi berikut berbasis pola beban yang teramati, bukan sizing formal:
+Karena target deployment belum ditentukan (bagian 1), estimasi berikut berbasis pola beban yang teramati, bukan sizing formal.
 
-- **CPU:** Beban dominan saat load test bukan komputasi query/algoritma, melainkan I/O logging (`runtime.cgocall` 36–46% samples, `profiling-report.md` §4) — pada mode production dengan logging dinonaktifkan, kebutuhan CPU jauh lebih rendah dari yang teramati di profiling. Untuk skala seed (50 karyawan), 1-2 vCPU cukup.
-- **RAM:** Total alokasi heap per 20 detik load test paralel (5 job) berkisar 62–293 MB (`profiling-report.md` §2), dengan `inuse_space` setelah GC hanya ~3.5-4.1 MB — jejak memory aktif kecil. 1-2 GB RAM cukup untuk skala aplikasi ini plus overhead PostgreSQL.
+**Catatan penting soal sumber data:** Seluruh angka CPU/RAM di bawah diambil dari profiling pada `payroll_profiling_db` — **skala stress-test 5.000 karyawan / 15.000 payroll dengan beban paralel 5 job**, bukan skala seed aktual (50 karyawan). Belum ada pengukuran langsung di skala seed. Karena beban stress-test 100x lebih besar dari seed dan tetap menunjukkan resource footprint kecil (lihat di bawah), skala seed secara logis akan lebih ringan lagi — namun ini ekstrapolasi, bukan angka terukur.
+
+- **CPU:** Beban dominan saat load test (skala 5.000 karyawan) bukan komputasi query/algoritma, melainkan I/O logging (`runtime.cgocall` 36–46% samples, `profiling-report.md` section 4) — pada mode production dengan logging dinonaktifkan, kebutuhan CPU jauh lebih rendah dari yang teramati di profiling. Estimasi hipotetis: 1-2 vCPU untuk beban setara skala stress-test ini; skala seed (50 karyawan) diperkirakan cukup dengan resource yang sama atau lebih kecil.
+- **RAM:** Total alokasi heap per 20 detik load test paralel (5 job, skala 5.000 karyawan) berkisar 62–293 MB (`profiling-report.md` section 2), dengan `inuse_space` setelah GC hanya ~3.5-4.1 MB — jejak memory aktif kecil bahkan di skala 100x lebih besar dari seed. Estimasi hipotetis: 1-2 GB RAM cukup untuk beban setara skala stress-test ini plus overhead PostgreSQL; skala seed diperkirakan jauh di bawah ini.
 - **Storage:** Minimal, karena tidak ada penyimpanan file/gambar; kebutuhan storage didominasi oleh pertumbuhan tabel `payroll` (snapshot per periode per karyawan) dan `komponen_gaji`.
 
 ---
 
 ## 4. Index Strategy
 
-Tiga index custom (`idx_karyawan_departemen`, `idx_payroll_karyawan_periode`, `idx_komponen_karyawan`) dipasang di kolom yang dipakai `WHERE`/`JOIN` (`project-design.md` §2.2), bukan dipasang di semua kolom secara serampangan. Bukti empiris (`profiling-report.md` §1) menunjukkan:
+Tiga index custom (`idx_karyawan_departemen`, `idx_payroll_karyawan_periode`, `idx_komponen_karyawan`) dipasang di kolom yang dipakai `WHERE`/`JOIN` (`project-design.md` section 2.2), bukan dipasang di semua kolom secara serampangan. Bukti empiris (`profiling-report.md` section 1) menunjukkan:
 
 - **`idx_payroll_karyawan_periode`** tidak memberi percepatan terukur pada volume/pola query saat ini (selektivitas ~33%) — tetap dipertahankan sebagai antisipasi jangka panjang (bila jumlah periode bertambah signifikan, mis. data 5 tahun = 60 periode, selektivitas filter periode akan jauh lebih tajam).
 - **`payroll_karyawan_id_periode_key`** (index tersembunyi dari `UNIQUE(karyawan_id, periode)`) terbukti memberi percepatan ~24x pada query selektivitas tinggi — index ini berfungsi ganda: enforcement business rule (cegah duplikasi payroll) sekaligus index performa.
+
+**Trade-off yang jujur diakui (belum diukur empiris):** Setiap index menambah overhead kecil pada operasi tulis (`INSERT`/`UPDATE`) karena PostgreSQL harus memperbarui struktur B-tree index tersebut, bukan hanya baris tabel. `profiling-report.md` hanya mengukur sisi baca (`SELECT` via `EXPLAIN ANALYZE`/pprof) — belum ada pengujian sisi tulis (mis. throughput `INSERT INTO payroll` dengan vs tanpa index). Trade-off ini diterima secara desain karena pola tulis sistem ini rendah-frekuensi (`GeneratePayroll` dipanggil per periode per karyawan, bukan continuous write), sehingga overhead index pada `INSERT` diperkirakan tidak signifikan dibanding manfaat baca yang terbukti — namun ini asumsi berbasis pola beban, bukan klaim terukur.
 
 **Prinsip yang dipegang:** efektivitas index bergantung pada selektivitas filter, bukan keberadaan index itu sendiri — tidak semua kolom otomatis butuh index, keputusan index diverifikasi lewat `EXPLAIN ANALYZE`, bukan asumsi.
 
@@ -66,13 +70,13 @@ Pool diverifikasi dengan `Ping()` saat startup — kegagalan koneksi terdeteksi 
 
 ## 6. Potensi Bottleneck
 
-Berdasarkan profiling (`profiling-report.md` §4), pada lingkungan pengujian ini:
+Berdasarkan profiling (`profiling-report.md` section 4), pada lingkungan pengujian ini:
 
 1. **I/O logging console** (Gin debug mode, synchronous write ke console) — bottleneck dominan di kedua endpoint yang diuji, bukan query database. Direkomendasikan nonaktif/diarahkan ke file untuk production.
 2. **`math/big` (via `shopspring/decimal`)** — kontributor alokasi memory terbesar di luar kode aplikasi sendiri (~10-15% di kedua endpoint). Ini trade-off desain disengaja (presisi finansial), bukan bug, tapi tetap relevan dipantau jika volume request bertambah drastis.
 3. **Algoritma sorting O(n²)** — bukan bottleneck saat ini (skala data kecil), tapi jadi risiko laten jika suatu saat jumlah komponen gaji per karyawan bertambah jauh di luar pola wajar (belasan baris).
 
-Tidak ditemukan indikasi memory leak selama pengujian (`profiling-report.md` §2.5).
+Tidak ditemukan indikasi memory leak selama pengujian (`profiling-report.md` section 2.5).
 
 ---
 
@@ -84,10 +88,10 @@ Tidak ditemukan indikasi memory leak selama pengujian (`profiling-report.md` §2
 - Read replica PostgreSQL — jika endpoint laporan (read-heavy, agregasi) jadi beban signifikan terpisah dari transaksi tulis (`GeneratePayroll`).
 - Load balancer + multiple instance API — jika concurrent request jauh melampaui kapasitas satu instance Gin.
 
-Kedua opsi ini **tidak diimplementasikan** dalam scope proyek (sesuai batasan scope, `project-design.md` §1.3) — didokumentasikan sebagai kesadaran arah scaling, bukan kebutuhan aktual saat ini.
+Kedua opsi ini **tidak diimplementasikan** dalam scope proyek (sesuai batasan scope, `project-design.md` section 1.3) — didokumentasikan sebagai kesadaran arah scaling, bukan kebutuhan aktual saat ini.
 
 ---
 
 ## 8. Kesimpulan
 
-Skala data riil proyek ini (50 karyawan seed) jauh di bawah titik di mana skalabilitas jadi masalah nyata. Keputusan desain (index selektif, connection pool, snapshot pattern di `payroll`) sudah mengantisipasi pertumbuhan data lewat pengujian empiris pada skala 100x lebih besar (5.000 karyawan), bukan asumsi teoretis semata. Bottleneck yang ditemukan saat ini bersifat konfigurasi environment (logging), bukan struktural — arsitektur single-server dengan connection pooling sudah memadai untuk kebutuhan proyek dan punya jalur jelas ke scaling vertikal/horizontal jika dibutuhkan di masa depan.
+Skala data riil proyek ini (50 karyawan seed) jauh di bawah titik di mana skalabilitas jadi masalah nyata. Keputusan desain (index selektif, connection pool, snapshot pattern di `payroll`) sudah mengantisipasi pertumbuhan data lewat pengujian empiris pada skala 100x lebih besar (5.000 karyawan), bukan asumsi teoretis semata, dan pada skala itu pun resource footprint (CPU, RAM) tetap kecil, sehingga skala seed diperkirakan jauh lebih ringan lagi. Bottleneck yang ditemukan saat ini bersifat konfigurasi environment (logging), bukan struktural. Satu trade-off yang belum diukur empiris (overhead index pada operasi tulis) diakui secara eksplisit sebagai batasan analisis, bukan disembunyikan - arsitektur single-server dengan connection pooling sudah memadai untuk kebutuhan proyek dan punya jalur jelas ke scaling vertikal/horizontal jika dibutuhkan di masa depan.

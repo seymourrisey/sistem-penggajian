@@ -594,6 +594,169 @@ PASS
 
 ---
 
+## Bug #14 — Generate Payroll untuk Karyawan Nonaktif Tidak Ditolak
+
+- **Endpoint:** `POST /api/payroll/generate`
+- **Severity:** Medium (data integrity — payroll tidak seharusnya bisa dibuat untuk karyawan yang statusnya sudah nonaktif/soft-deleted)
+
+### Langkah Reproduksi
+```
+POST /api/payroll/generate
+{"karyawan_id": "<id karyawan berstatus nonaktif>", "periode": "2026-08-01"}
+```
+
+### Before
+```
+[GIN] 2026/07/25 - 20:00:57 | 201 |   1.13ms |             ::1 | POST     "/api/payroll/generate"
+```
+Payroll berhasil digenerate meski karyawan berstatus `nonaktif` — tidak ada validasi status sebelum kalkulasi berjalan.
+
+### Root Cause
+`GeneratePayroll` di `payroll_service.go` memanggil `karyawanRepo.GetByID` untuk mengambil `gaji_pokok`, tapi tidak pernah memeriksa field `Status` dari hasil fetch tersebut. Karyawan yang sudah di-soft-delete (status `nonaktif`) tetap lolos karena secara teknis masih ada di tabel `karyawan` (by design, untuk audit trail riwayat payroll) — tapi status itu tidak pernah dicek di jalur generate payroll, sehingga karyawan yang sudah tidak aktif bisa tetap "digaji".
+
+### Fix (After)
+Tambah pengecekan status setelah `GetByID`, di `payroll_service.go`:
+```go
+if karyawan.Status != model.StatusKaryawanAktif {
+    return nil, repository.ErrKaryawanTidakAktif
+}
+```
+Sentinel error baru di `internal/repository/payroll_repository.go`:
+```go
+// ErrKaryawanTidakAktif dikembalikan ketika karyawan tidak aktif.
+var ErrKaryawanTidakAktif = errors.New("karyawan tidak aktif")
+```
+Mapping di `mapPayrollError` (`payroll_handler.go`):
+```go
+case errors.Is(err, repository.ErrKaryawanTidakAktif):
+    c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+```
+
+### Verifikasi
+```
+[GIN] 2026/07/25 - 20:02:23 | 400 |   4.14ms |             ::1 | POST     "/api/payroll/generate"
+```
+```json
+{"error": "karyawan tidak aktif"}
+```
+
+---
+
+## Bug #15 — Komponen Gaji Masih Dapat Ditambah dan Diubah pada Karyawan Nonaktif
+
+- **Endpoint:** `POST /api/karyawan/{id}/komponen-gaji`, `PUT /api/karyawan/{id}/komponen-gaji/{komponen_id}`
+- **Severity:** Medium (business rule violation — komponen gaji seharusnya tidak dapat dimodifikasi setelah karyawan berstatus nonaktif)
+
+### Langkah Reproduksi
+**POST**
+```http
+POST /api/karyawan/{id}/komponen-gaji
+{
+  "jenis": "tunjangan",
+  "nama": "Transport",
+  "nominal": 300000,
+  "is_persen": false
+}
+```
+
+**PUT**
+```http
+PUT /api/karyawan/{id}/komponen-gaji/{komponen_id}
+{
+  "jenis": "potongan",
+  "nama": "BPJS",
+  "nominal": 150000,
+  "is_persen": false
+}
+```
+
+Gunakan `id` karyawan yang telah di-soft delete (`status = nonaktif`).
+
+### Before
+
+**POST**
+```text
+[GIN] 2026/07/25 - 20:57:56 | 201 | 4.62ms | ::1 | POST "/api/karyawan/6/komponen-gaji"
+```
+
+**PUT**
+```text
+[GIN] 2026/07/25 - 21:43:18 | 200 | 588.4µs | ::1 | PUT "/api/karyawan/61/komponen-gaji/32"
+```
+
+Penambahan maupun perubahan komponen gaji tetap berhasil meskipun karyawan telah berstatus `nonaktif`, karena belum ada validasi status sebelum operasi penyimpanan dilakukan.
+
+### Root Cause
+
+Business rule validasi status karyawan sebelumnya hanya diterapkan pada proses `GeneratePayroll`. Pada `komponenGajiService`, fungsi `Create()` dan `Update()` langsung memanggil repository untuk melakukan operasi database tanpa terlebih dahulu memverifikasi status karyawan. Akibatnya, karyawan yang telah di-soft delete masih dapat memiliki komponen gaji yang ditambah maupun diubah.
+
+### Fix (After)
+
+Tambahkan dependency `KaryawanRepository` pada `komponenGajiService` agar service dapat memeriksa status karyawan sebelum melakukan operasi.
+
+```go
+type komponenGajiService struct {
+	repo         repository.KomponenGajiRepository
+	karyawanRepo repository.KaryawanRepository
+}
+
+func NewKomponenGajiService(
+	repo repository.KomponenGajiRepository,
+	karyawanRepo repository.KaryawanRepository,
+) KomponenGajiService {
+	return &komponenGajiService{
+		repo:         repo,
+		karyawanRepo: karyawanRepo,
+	}
+}
+```
+
+Tambahkan validasi pada `Create()` dan `Update()`:
+
+```go
+karyawan, err := s.karyawanRepo.GetByID(ctx, k.KaryawanID)
+if err != nil {
+	return err
+}
+
+if karyawan.Status != model.StatusKaryawanAktif {
+	return repository.ErrKaryawanTidakAktif
+}
+```
+
+Tambahkan mapping pada `mapKomponenGajiError()`:
+
+```go
+case errors.Is(err, repository.ErrKaryawanTidakAktif):
+	c.JSON(http.StatusBadRequest, gin.H{
+		"error": err.Error(),
+	})
+```
+
+### Verifikasi
+
+**POST**
+
+```text
+[GIN] 2026/07/25 - 21:20:30 | 400 | 2.8ms | ::1 | POST "/api/karyawan/6/komponen-gaji"
+```
+
+**PUT**
+
+```text
+[GIN] 2026/07/25 - 21:43:18 | 400 | ... | ::1 | PUT "/api/karyawan/61/komponen-gaji/32"
+```
+
+```json
+{
+  "error": "karyawan tidak aktif"
+}
+```
+
+Penambahan maupun perubahan komponen gaji kini ditolak ketika karyawan berstatus `nonaktif`, sehingga business rule diterapkan secara konsisten pada seluruh operasi yang memodifikasi data komponen gaji.
+
+---
+
 ## Verifikasi Tambahan Menggunakan Delve (Go Debugger)
 
 Seluruh bug pada dokumen ini ditemukan melalui exploratory testing manual menggunakan Postman. Setelah akar masalah diidentifikasi dan didokumentasikan, dilakukan verifikasi tambahan menggunakan Delve (Go debugger) untuk menelusuri alur eksekusi program dan mengonfirmasi root cause pada beberapa kasus yang representatif. Root cause kedua kasus di bawah **sudah diketahui dan sudah di-fix** sebelumnya (lihat Bug #8 dan #13 di atas); untuk keperluan verifikasi ini, fix pada kode sementara di-revert ke versi buggy, direproduksi ulang, ditelusuri lewat Delve, lalu dikembalikan ke versi fixed.
@@ -703,170 +866,6 @@ Konfirmasi langsung dari eksekusi nyata: `k.Status` dan `k.CreatedAt` tetap zero
 ### Kesimpulan
 
 Melalui Delve, proses debugging tidak hanya dilakukan melalui inspeksi source code, tetapi juga melalui observasi langsung terhadap nilai variabel dan hasil eksekusi program saat runtime. Hasil observasi tersebut konsisten dengan root cause yang telah didokumentasikan pada Bug #8 dan Bug #13, sehingga memperkuat validitas analisis dan perbaikan yang dilakukan.
-
----
-
-
-## Bug #14 — Generate Payroll untuk Karyawan Nonaktif Tidak Ditolak
-
-- **Endpoint:** `POST /api/payroll/generate`
-- **Severity:** Medium (data integrity — payroll tidak seharusnya bisa dibuat untuk karyawan yang statusnya sudah nonaktif/soft-deleted)
-
-### Langkah Reproduksi
-```
-POST /api/payroll/generate
-{"karyawan_id": "<id karyawan berstatus nonaktif>", "periode": "2026-08-01"}
-```
-
-### Before
-```
-[GIN] 2026/07/25 - 20:00:57 | 201 |   1.13ms |             ::1 | POST     "/api/payroll/generate"
-```
-Payroll berhasil digenerate meski karyawan berstatus `nonaktif` — tidak ada validasi status sebelum kalkulasi berjalan.
-
-### Root Cause
-`GeneratePayroll` di `payroll_service.go` memanggil `karyawanRepo.GetByID` untuk mengambil `gaji_pokok`, tapi tidak pernah memeriksa field `Status` dari hasil fetch tersebut. Karyawan yang sudah di-soft-delete (status `nonaktif`) tetap lolos karena secara teknis masih ada di tabel `karyawan` (by design, untuk audit trail riwayat payroll) — tapi status itu tidak pernah dicek di jalur generate payroll, sehingga karyawan yang sudah tidak aktif bisa tetap "digaji".
-
-### Fix (After)
-Tambah pengecekan status setelah `GetByID`, di `payroll_service.go`:
-```go
-if karyawan.Status != model.StatusKaryawanAktif {
-    return nil, repository.ErrKaryawanTidakAktif
-}
-```
-Sentinel error baru di `internal/repository/payroll_repository.go`:
-```go
-// ErrKaryawanTidakAktif dikembalikan ketika karyawan tidak aktif.
-var ErrKaryawanTidakAktif = errors.New("karyawan tidak aktif")
-```
-Mapping di `mapPayrollError` (`payroll_handler.go`):
-```go
-case errors.Is(err, repository.ErrKaryawanTidakAktif):
-    c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-```
-
-### Verifikasi
-```
-[GIN] 2026/07/25 - 20:02:23 | 400 |   4.14ms |             ::1 | POST     "/api/payroll/generate"
-```
-```json
-{"error": "karyawan tidak aktif"}
-```
-
----
-
-## Bug #15 — Komponen Gaji Masih Dapat Ditambah dan Diubah pada Karyawan Nonaktif
-
-### Gejala
-
-Meskipun karyawan telah di-soft delete (status berubah menjadi `nonaktif`), endpoint penambahan dan perubahan komponen gaji masih mengizinkan modifikasi data.
-
-Endpoint yang terdampak:
-
-```http
-POST /api/karyawan/{id}/komponen-gaji
-PUT /api/karyawan/{id}/komponen-gaji/{komponen_id}
-```
-
-Hasil sebelum perbaikan:
-
-**POST**
-
-```text
-[GIN] 2026/07/25 - 20:57:56 | 201 | 4.62ms | ::1 | POST "/api/karyawan/6/komponen-gaji"
-```
-
-**PUT**
-
-```text
-[GIN] 2026/07/25 - 21:43:18 | 200 | 588.4µs | ::1 | PUT "/api/karyawan/61/komponen-gaji/32"
-```
-
-Kedua endpoint masih berhasil memodifikasi data (`HTTP 201 Created` dan `HTTP 200 OK`) meskipun karyawan telah berstatus `nonaktif`.
-
----
-
-### Analisis Penyebab
-
-Business rule sebelumnya hanya diterapkan pada proses `GeneratePayroll`, yaitu hanya karyawan dengan status `aktif` yang boleh diproses.
-
-Namun validasi tersebut belum diterapkan pada proses penambahan (`POST`) maupun perubahan (`PUT`) komponen gaji. Service langsung melakukan operasi penyimpanan ke database tanpa terlebih dahulu memverifikasi status karyawan.
-
-Akibatnya, data komponen gaji masih dapat ditambah maupun diubah setelah karyawan tidak lagi aktif, sehingga menimbulkan inkonsistensi terhadap aturan bisnis sistem penggajian.
-
----
-
-### Fix (After)
-
-Perbaikan dilakukan pada layer service dengan menambahkan dependency `KaryawanRepository` ke `komponenGajiService`, sehingga service dapat mengambil data karyawan sebelum melakukan operasi penyimpanan maupun pembaruan data.
-
-Constructor diperbarui menjadi:
-
-```go
-type komponenGajiService struct {
-	repo         repository.KomponenGajiRepository
-	karyawanRepo repository.KaryawanRepository
-}
-
-func NewKomponenGajiService(
-	repo repository.KomponenGajiRepository,
-	karyawanRepo repository.KaryawanRepository,
-) KomponenGajiService {
-	return &komponenGajiService{
-		repo:         repo,
-		karyawanRepo: karyawanRepo,
-	}
-}
-```
-
-Selanjutnya, pada fungsi `Create()` dan `Update()` ditambahkan validasi status karyawan sebelum operasi database dilakukan.
-
-```go
-karyawan, err := s.karyawanRepo.GetByID(ctx, k.KaryawanID)
-if err != nil {
-	return err
-}
-
-if karyawan.Status != model.StatusKaryawanAktif {
-	return repository.ErrKaryawanTidakAktif
-}
-```
-
-Selain itu, `mapKomponenGajiError()` diperbarui agar `repository.ErrKaryawanTidakAktif` dipetakan menjadi **HTTP 400 Bad Request**, bukan `500 Internal Server Error`.
-
----
-
-### Verifikasi Setelah Perbaikan
-
-#### POST Komponen Gaji
-
-```text
-[GIN] 2026/07/25 - 21:20:30 | 400 | 2.8ms | ::1 | POST "/api/karyawan/6/komponen-gaji"
-```
-
-Response:
-
-```json
-{
-  "error": "karyawan tidak aktif"
-}
-```
-
-#### PUT Komponen Gaji
-
-```text
-[GIN] 2026/07/25 - 21:43:18 | 400 | ... | ::1 | PUT "/api/karyawan/61/komponen-gaji/32"
-```
-
-Response:
-
-```json
-{
-  "error": "karyawan tidak aktif"
-}
-```
-
-Hasil pengujian menunjukkan bahwa business rule kini diterapkan secara konsisten pada seluruh operasi yang memodifikasi data komponen gaji. Baik penambahan (`POST`) maupun pembaruan (`PUT`) hanya dapat dilakukan terhadap karyawan dengan status **aktif**, sedangkan permintaan terhadap karyawan berstatus `nonaktif` akan ditolak dengan **HTTP 400 Bad Request**.
 
 ---
 
