@@ -2,6 +2,7 @@ package integration
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -105,7 +106,7 @@ func TestUpdateKaryawan(t *testing.T) {
 	})
 
 	// status_tidak_berubah_meski_dikirim menguji business rule dari
-	// ProjectDesign-SistemPenggajian.md section 2.2: kolom `status` pada
+	// project-design.md section 2.2: kolom `status` pada
 	// karyawan hanya boleh berubah lewat soft-delete (DELETE), bukan lewat
 	// PUT biasa. Test ini sengaja mengirim field "status" di body PUT untuk
 	// memastikan field tersebut diabaikan secara struktural (query UPDATE
@@ -176,6 +177,150 @@ func TestUpdateKaryawan(t *testing.T) {
 		}
 		if getResp["status"] != "aktif" {
 			t.Errorf("verifikasi database: status seharusnya tetap aktif, got %v", getResp["status"])
+		}
+	})
+
+	t.Run("gaji_pokok_0_400", func(t *testing.T) {
+		// Setup: buat karyawan.
+		createBody := map[string]interface{}{
+			"nip":           "TUK-GAJI-001",
+			"nama":          "Budi Santoso",
+			"departemen_id": seedDepartemenITID,
+			"jabatan":       "Staff",
+			"gaji_pokok":    5000000,
+			"tanggal_masuk": "2022-01-01",
+		}
+
+		createRec := doCreateKaryawanRequest(t, createBody)
+		if createRec.Code != http.StatusCreated {
+			t.Fatalf("setup: create karyawan harus 201, got %d, body: %s",
+				createRec.Code,
+				createRec.Body.String())
+		}
+
+		id := extractIDFromResponse(t, createRec)
+
+		updateBody := map[string]interface{}{
+			"nip":           "TUK-GAJINOL-001",
+			"nama":          "Budi Santoso",
+			"departemen_id": seedDepartemenITID,
+			"jabatan":       "Staff",
+			"gaji_pokok":    0,
+			"tanggal_masuk": "2022-01-01",
+		}
+
+		rec := doUpdateKaryawanRequest(t, id, updateBody)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected status 400, got %d, body: %s",
+				rec.Code,
+				rec.Body.String())
+		}
+
+		var resp map[string]interface{}
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("gagal decode response: %v", err)
+		}
+
+		if resp["error"] != "gaji pokok tidak boleh nol" {
+			t.Errorf("expected error 'gaji pokok tidak boleh nol', got %v",
+				resp["error"])
+		}
+
+		// Verifikasi database tidak berubah.
+		var gajiPokok string
+
+		err := testPool.QueryRow(
+			context.Background(),
+			`SELECT gaji_pokok
+			 FROM karyawan
+			 WHERE id=$1`,
+			id,
+		).Scan(&gajiPokok)
+
+		if err != nil {
+			t.Fatalf("gagal query database: %v", err)
+		}
+
+		expectedGajiPokok := "5000000.00"
+
+		if gajiPokok != expectedGajiPokok {
+			t.Errorf(
+				"expected db gaji_pokok tetap 5000000.00, got %s",
+				gajiPokok,
+			)
+		}
+	})
+
+	t.Run("gaji_pokok_negatif_400", func(t *testing.T) {
+		// Setup: buat karyawan.
+		createBody := map[string]interface{}{
+			"nip":           "TUK-GAJI-002",
+			"nama":          "Andi Wijaya",
+			"departemen_id": seedDepartemenITID,
+			"jabatan":       "Staff",
+			"gaji_pokok":    5000000,
+			"tanggal_masuk": "2022-01-01",
+		}
+
+		createRec := doCreateKaryawanRequest(t, createBody)
+		if createRec.Code != http.StatusCreated {
+			t.Fatalf("setup: create karyawan harus 201, got %d, body: %s",
+				createRec.Code,
+				createRec.Body.String())
+		}
+
+		id := extractIDFromResponse(t, createRec)
+
+		updateBody := map[string]interface{}{
+			"nip":           "TUK-GAJINEG-002",
+			"nama":          "Andi Wijaya",
+			"departemen_id": seedDepartemenITID,
+			"jabatan":       "Staff",
+			"gaji_pokok":    -1,
+			"tanggal_masuk": "2022-01-01",
+		}
+
+		rec := doUpdateKaryawanRequest(t, id, updateBody)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected status 400, got %d, body: %s",
+				rec.Code,
+				rec.Body.String())
+		}
+
+		var resp map[string]interface{}
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("gagal decode response: %v", err)
+		}
+
+		if resp["error"] != "gaji pokok tidak boleh negatif" {
+			t.Errorf("expected error 'gaji pokok tidak boleh negatif', got %v",
+				resp["error"])
+		}
+
+		// Verifikasi database tidak berubah.
+		var gajiPokok string
+
+		err := testPool.QueryRow(
+			context.Background(),
+			`SELECT gaji_pokok
+			 FROM karyawan
+			 WHERE id=$1`,
+			id,
+		).Scan(&gajiPokok)
+
+		if err != nil {
+			t.Fatalf("gagal query database: %v", err)
+		}
+
+		expectedGajiPokok := "5000000.00"
+
+		if gajiPokok != expectedGajiPokok {
+			t.Errorf(
+				"expected db gaji_pokok tetap 5000000.00, got %s",
+				gajiPokok,
+			)
 		}
 	})
 }

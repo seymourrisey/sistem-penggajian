@@ -100,6 +100,64 @@ func TestCreateKaryawan(t *testing.T) {
 			t.Fatalf("expected status 400 untuk departemen_id tidak valid, got %d, body: %s", rec.Code, rec.Body.String())
 		}
 	})
+
+	t.Run("gaji_pokok_0_400", func(t *testing.T) {
+		body := map[string]interface{}{
+			"nip":           "TCK-GAJINOL-001",
+			"nama":          "Budi Santoso",
+			"departemen_id": seedDepartemenITID,
+			"jabatan":       "Staff",
+			"gaji_pokok":    0,
+			"tanggal_masuk": "2024-01-15",
+		}
+
+		rec := doCreateKaryawanRequest(t, body)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected status 400, got %d, body: %s",
+				rec.Code,
+				rec.Body.String())
+		}
+
+		var resp map[string]interface{}
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("gagal decode response: %v", err)
+		}
+
+		if resp["error"] != "gaji pokok tidak boleh nol" {
+			t.Errorf("expected error 'gaji pokok tidak boleh nol', got %v",
+				resp["error"])
+		}
+	})
+
+	t.Run("gaji_pokok_negatif_400", func(t *testing.T) {
+		body := map[string]interface{}{
+			"nip":           "TCK-GAJINEG-002",
+			"nama":          "Budi Santoso",
+			"departemen_id": seedDepartemenITID,
+			"jabatan":       "Staff",
+			"gaji_pokok":    -1,
+			"tanggal_masuk": "2024-01-15",
+		}
+
+		rec := doCreateKaryawanRequest(t, body)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected status 400, got %d, body: %s",
+				rec.Code,
+				rec.Body.String())
+		}
+
+		var resp map[string]interface{}
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("gagal decode response: %v", err)
+		}
+
+		if resp["error"] != "gaji pokok tidak boleh negatif" {
+			t.Errorf("expected error 'gaji pokok tidak boleh negatif', got %v",
+				resp["error"])
+		}
+	})
 }
 
 // doCreateKaryawanRequest adalah helper untuk mengirim POST /api/karyawan

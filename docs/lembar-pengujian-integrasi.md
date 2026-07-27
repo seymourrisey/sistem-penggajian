@@ -43,6 +43,8 @@
 | 2 | Validasi gagal: field nama kosong | nip="TCK-VALIDASI-001"; nama=""; departemen_id=seedDepartemenITID; jabatan="Staff"; gaji_pokok=5.000.000; tanggal_masuk="2024-01-15" | HTTP 400 (binding `required` menolak sebelum sempat ke service) | Sesuai expected | PASS |
 | 3 | NIP duplikat: insert kedua dengan NIP sama harus ditolak | Insert pertama: nip="TCK-DUPLIKAT-001", nama="Karyawan Pertama" → sukses. Insert kedua: nip sama, nama="Karyawan Kedua Nama Beda" | Insert pertama HTTP 201; insert kedua HTTP 409 (UNIQUE constraint pada kolom nip) | Sesuai expected | PASS |
 | 4 | departemen_id tidak valid (FK constraint) | nip="TCK-DEPTINVALID-001"; nama="Karyawan Departemen Salah"; departemen_id=999999 (tidak ada di tabel departemen); jabatan="Staff"; gaji_pokok=5.000.000; tanggal_masuk="2024-01-15" | HTTP 400 (`repository.ErrDepartemenTidakValid` via `mapKaryawanError`) | Sesuai expected | PASS |
+| 5 | Validasi gagal: gaji_pokok = 0 | nip="TCK-GAJINOL-001"; nama="Karyawan Gaji Nol"; departemen_id=seedDepartemenITID; jabatan="Staff"; gaji_pokok=0; tanggal_masuk="2024-01-15" | HTTP 400 (validasi service layer menolak gaji_pokok=0 — bukan dari `binding:"required"`, lihat catatan Temuan #5 code-review-checklist.md) | Sesuai expected | PASS |
+| 6 | Validasi gagal: gaji_pokok negatif | nip="TCK-GAJINEG-001"; nama="Karyawan Gaji Negatif"; departemen_id=seedDepartemenITID; jabatan="Staff"; gaji_pokok=-1.000.000; tanggal_masuk="2024-01-15" | HTTP 400 (`service.ErrGajiPokokNegatif` via `mapKaryawanError`) | Sesuai expected | PASS |
 
 ---
 
@@ -64,6 +66,8 @@
 | 9 | Karyawan tidak ditemukan | PUT `/api/karyawan/999999` dengan body update valid (nip="TUK-404-001", dst) | HTTP 404 | Sesuai expected | PASS |
 | 10 | Validasi gagal: field nip kosong | Setup: insert nip="TUK-VALIDASI-001" → ambil id. Update dengan nip="" (kosong), field lain valid | HTTP 400 (binding `required` menolak) | Sesuai expected | PASS |
 | 11 | Business rule: status tidak berubah meski dikirim di body PUT | Setup: insert nip="TUK-STATUS-001", status default "aktif" → ambil id. Update dengan body menyertakan `"status": "nonaktif"` (field asing, bersamaan dengan jabatan="Staff Senior" yang valid) | HTTP 200; response `status` tetap "aktif" (bukan "nonaktif"); `jabatan` tetap ter-update ke "Staff Senior"; verifikasi GET ulang ke database juga `status`="aktif" | Sesuai expected (setelah fix Bug #13, lihat catatan di bawah) | PASS |
+| 12 | Validasi gagal: update gaji_pokok = 0 | Setup: insert nip="TUK-GAJINOL-001" → ambil id. Update dengan gaji_pokok=0, field lain valid | HTTP 400 (validasi service layer menolak gaji_pokok=0) | Sesuai expected | PASS |
+| 13 | Validasi gagal: update gaji_pokok negatif | Setup: insert nip="TUK-GAJINEG-001" → ambil id. Update dengan gaji_pokok=-1.000.000, field lain valid | HTTP 400 (`service.ErrGajiPokokNegatif` via `mapKaryawanError`) | Sesuai expected | PASS |
 
 ---
 
