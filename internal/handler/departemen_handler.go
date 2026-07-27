@@ -97,9 +97,7 @@ func (h *DepartemenHandler) Update(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "departemen berhasil di update",
-	})
+	c.JSON(http.StatusOK, dept)
 }
 
 // Delete menangani DELETE /api/departemen/{id}.

@@ -89,7 +89,7 @@ func (r *komponenGajiRepository) GetByID(ctx context.Context, id int) (*model.Ko
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrKomponenGajiNotFound
 		}
-		return nil, err
+		return nil, fmt.Errorf("gagal ambil komponen gaji id=%d: %w", id, err)
 	}
 	return &k, nil
 }
@@ -106,7 +106,7 @@ func (r *komponenGajiRepository) GetByKaryawanID(ctx context.Context, karyawanID
 
 	rows, err := r.db.Query(ctx, query, karyawanID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("gagal ambil komponen gaji karyawan_id=%d: %w", karyawanID, err)
 	}
 	defer rows.Close()
 
@@ -117,12 +117,12 @@ func (r *komponenGajiRepository) GetByKaryawanID(ctx context.Context, karyawanID
 		if err := rows.Scan(
 			&k.ID, &k.KaryawanID, &k.Jenis, &k.Nama, &k.Nominal, &k.IsPersen,
 		); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("gagal scan komponen gaji karyawan_id=%d: %w", karyawanID, err)
 		}
 		result = append(result, k)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error iterasi komponen gaji karyawan_id=%d: %w", karyawanID, err)
 	}
 	return result, nil
 }
@@ -153,7 +153,7 @@ func (r *komponenGajiRepository) Update(ctx context.Context, k *model.KomponenGa
 		if mapped := mapKomponenGajiPgError(err); mapped != nil {
 			return mapped
 		}
-		return fmt.Errorf("gagal membuat komponen gaji untuk karyawan_id=%d: %w", k.KaryawanID, err)
+		return fmt.Errorf("gagal update komponen gaji untuk karyawan_id=%d: %w", k.KaryawanID, err)
 	}
 
 	if tag.RowsAffected() == 0 {

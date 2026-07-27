@@ -16,7 +16,10 @@ var ErrNipKosong = errors.New("nip tidak boleh kosong")
 var ErrNamaKaryawanKosong = errors.New("nama karyawan tidak boleh kosong")
 
 // ErrGajiPokokNegatif dikembalikan ketika gaji_pokok bernilai negatif.
-var ErrGajiPokokNegatif = errors.New("gaji_pokok tidak boleh negatif")
+var ErrGajiPokokNegatif = errors.New("gaji pokok tidak boleh negatif")
+
+// ErrGajiPokokNol dikembalikan ketika gaji_pokok bernilai nol.
+var ErrGajiPokokNol = errors.New("gaji pokok tidak boleh nol")
 
 // KaryawanService mendefinisikan business logic untuk entitas Karyawan.
 type KaryawanService interface {
@@ -42,6 +45,7 @@ func (s *karyawanService) Create(ctx context.Context, k *model.Karyawan) error {
 	if err := validateKaryawan(k); err != nil {
 		return err
 	}
+
 	return s.repo.Create(ctx, k)
 }
 
@@ -80,6 +84,9 @@ func validateKaryawan(k *model.Karyawan) error {
 	}
 	if k.GajiPokok.IsNegative() {
 		return ErrGajiPokokNegatif
+	}
+	if k.GajiPokok.IsZero() {
+		return ErrGajiPokokNol
 	}
 	return nil
 }

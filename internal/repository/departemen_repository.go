@@ -112,16 +112,17 @@ func (r *departemenRepository) Update(ctx context.Context, d *model.Departemen) 
 		UPDATE departemen
 		SET nama = $1
 		WHERE id = $2
+		RETURNING created_at
 	`
-	cmdTag, err := r.db.Exec(ctx, query, d.Nama, d.ID)
+	err := r.db.QueryRow(ctx, query, d.Nama, d.ID).Scan(&d.CreatedAt)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrDepartemenNotFound
+		}
 		if mapped := mapDepartemenPgError(err); mapped != nil {
 			return mapped
 		}
 		return fmt.Errorf("gagal update departemen id=%d: %w", d.ID, err)
-	}
-	if cmdTag.RowsAffected() == 0 {
-		return ErrDepartemenNotFound
 	}
 	return nil
 }

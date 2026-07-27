@@ -41,6 +41,34 @@ type komponenGajiUpdateRequest struct {
 	IsPersen bool            `json:"is_persen"`
 }
 
+type komponenGajiResponse struct {
+	ID         int                     `json:"id"`
+	KaryawanID int                     `json:"karyawan_id"`
+	Jenis      model.JenisKomponenGaji `json:"jenis"`
+	Nama       string                  `json:"nama"`
+	Nominal    decimal.Decimal         `json:"nominal"`
+	IsPersen   bool                    `json:"is_persen"`
+}
+
+func newKomponenGajiResponse(k *model.KomponenGaji) komponenGajiResponse {
+	return komponenGajiResponse{
+		ID:         k.ID,
+		KaryawanID: k.KaryawanID,
+		Jenis:      k.Jenis,
+		Nama:       k.Nama,
+		Nominal:    k.Nominal,
+		IsPersen:   k.IsPersen,
+	}
+}
+
+func listKomponenGajiResponse(list []model.KomponenGaji) []komponenGajiResponse {
+	resp := make([]komponenGajiResponse, 0, len(list))
+	for _, k := range list {
+		resp = append(resp, newKomponenGajiResponse(&k))
+	}
+	return resp
+}
+
 // Create menangani POST /api/karyawan/:id/komponen-gaji.
 func (h *KomponenGajiHandler) Create(c *gin.Context) {
 	karyawanID, err := strconv.Atoi(c.Param("id"))
@@ -68,7 +96,7 @@ func (h *KomponenGajiHandler) Create(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, k)
+	c.JSON(http.StatusCreated, newKomponenGajiResponse(k))
 }
 
 // Update menangani PUT /api/karyawan/:id/komponen-gaji/:id.
@@ -106,7 +134,7 @@ func (h *KomponenGajiHandler) Update(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, k)
+	c.JSON(http.StatusOK, newKomponenGajiResponse(k))
 }
 
 // GetByKaryawanID menangani GET /api/karyawan/:id/komponen-gaji.
@@ -127,7 +155,7 @@ func (h *KomponenGajiHandler) GetByKaryawanID(c *gin.Context) {
 	// sorting manual (bukan ORDER BY SQL)
 	util.SortKomponenGajiByNominalDesc(komponenGaji)
 
-	c.JSON(http.StatusOK, komponenGaji)
+	c.JSON(http.StatusOK, listKomponenGajiResponse(komponenGaji))
 }
 
 // GetByID menangani GET /api/komponen-gaji/:id.
@@ -144,7 +172,7 @@ func (h *KomponenGajiHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, komponenGaji)
+	c.JSON(http.StatusOK, newKomponenGajiResponse(komponenGaji))
 }
 
 // mapKomponenGajiError memetakan error dari service/repository layer ke HTTP

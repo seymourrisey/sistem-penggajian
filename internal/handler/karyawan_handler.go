@@ -233,7 +233,8 @@ func mapKaryawanError(c *gin.Context, err error) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	case errors.Is(err, service.ErrNipKosong),
 		errors.Is(err, service.ErrNamaKaryawanKosong),
-		errors.Is(err, service.ErrGajiPokokNegatif):
+		errors.Is(err, service.ErrGajiPokokNegatif),
+		errors.Is(err, service.ErrGajiPokokNol):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	default:
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

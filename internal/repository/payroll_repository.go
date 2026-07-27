@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -15,7 +16,7 @@ import (
 // ErrPayrollAlreadyExists dikembalikan ketika payroll untuk kombinasi
 // karyawan_id dan periode yang sama sudah pernah digenerate (mapping dari
 // pelanggaran UNIQUE constraint payroll(karyawan_id, periode)).
-var ErrPayrollAlreadyExists = errors.New("payroll sudah ada untuk karyawan dan periode ini!")
+var ErrPayrollAlreadyExists = errors.New("payroll sudah ada untuk karyawan dan periode ini")
 
 // ErrKaryawanTidakAktif dikembalikan ketika karyawan tidak aktif.
 var ErrKaryawanTidakAktif = errors.New("karyawan tidak aktif")
@@ -82,7 +83,7 @@ func (r *payrollRepository) Create(ctx context.Context, tx pgx.Tx, p *model.Payr
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return ErrPayrollAlreadyExists
 		}
-		return err
+		return fmt.Errorf("gagal insert payroll: %w", err)
 	}
 	return nil
 }
@@ -103,7 +104,7 @@ func (r *payrollRepository) GetRiwayatByKaryawanID(ctx context.Context, karyawan
 
 	rows, err := r.db.Query(ctx, query, karyawanID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("gagal ambil riwayat payroll karyawan_id=%d: %w", karyawanID, err)
 	}
 	defer rows.Close()
 
@@ -115,12 +116,12 @@ func (r *payrollRepository) GetRiwayatByKaryawanID(ctx context.Context, karyawan
 			&pr.Periode, &pr.GajiPokok, &pr.TotalTunjangan, &pr.TotalPotongan, &pr.GajiBersih,
 			&pr.Status, &pr.CreatedAt,
 		); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("gagal scan riwayat payroll karyawan_id=%d: %w", karyawanID, err)
 		}
 		result = append(result, pr)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error iterasi riwayat payroll karyawan_id=%d: %w", karyawanID, err)
 	}
 	return result, nil
 }
@@ -149,7 +150,7 @@ func (r *payrollRepository) GetLaporanAgregat(ctx context.Context, periode time.
 
 	rows, err := r.db.Query(ctx, query, periode)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("gagal ambil laporan payroll periode=%s: %w", periode.Format(time.DateOnly), err)
 	}
 	defer rows.Close()
 
@@ -160,13 +161,13 @@ func (r *payrollRepository) GetLaporanAgregat(ctx context.Context, periode time.
 			&l.DepartemenID, &l.NamaDepartemen,
 			&l.JumlahKaryawan, &l.TotalGajiBersih, &l.RataRataGajiBersih,
 		); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("gagal scan laporan departemen periode=%s: %w", periode.Format(time.DateOnly), err)
 		}
 		l.Periode = periode
 		result = append(result, l)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error iterasi laporan departemen periode=%s: %w", periode.Format(time.DateOnly), err)
 	}
 	return result, nil
 }
