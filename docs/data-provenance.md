@@ -1,9 +1,6 @@
 # Data Provenance — Dataset Sistem Informasi Penggajian
 
-Dokumen ini mencatat proses analisis, evaluasi, dan transformasi dataset yang digunakan
-untuk mengisi `seed.sql`. Ditulis sebagai bukti proses kerja analis terhadap instruksi
-tugas ("siapkan dataset penggajian, dapat menggunakan data publik ataupun data privat")
-dan arahan asesor untuk mempelajari sifat-sifat data publik vs privat sebelum digunakan.
+Dokumen ini mencatat proses analisis, evaluasi, dan transformasi dataset sintetis dari Kaggle yang digunakan untuk mengisi `seed.sql`. Ditulis sebagai bukti proses kerja analis dalam melakukan seleksi, evaluasi kesesuaian, dan transformasi dataset sebelum digunakan sebagai seed data pada sistem.
 
 ---
 

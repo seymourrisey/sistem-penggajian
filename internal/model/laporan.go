@@ -10,7 +10,7 @@ import (
 // JOIN antara payroll dan karyawan (untuk menampilkan nip & nama tanpa
 // query terpisah). Digunakan oleh GET /api/payroll/:karyawan_id/riwayat.
 type PayrollRiwayat struct {
-	ID             int             `json:"id" db:"id"`
+	ID             int             `json:"id" db:"payroll_id"`
 	KaryawanID     int             `json:"karyawan_id" db:"karyawan_id"`
 	NIP            string          `json:"nip" db:"nip"`
 	NamaKaryawan   string          `json:"nama_karyawan" db:"nama_karyawan"`

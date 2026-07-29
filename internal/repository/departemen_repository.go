@@ -46,9 +46,9 @@ func NewDepartemenRepository(db *pgxpool.Pool) DepartemenRepository {
 // Create menambahkan departemen baru dan mengisi ID serta CreatedAt hasil insert.
 func (r *departemenRepository) Create(ctx context.Context, d *model.Departemen) error {
 	query := `
-		INSERT INTO departemen (nama)
+		INSERT INTO departemen (nama_departemen)
 		VALUES ($1)
-		RETURNING id, created_at
+		RETURNING departemen_id, created_at
 	`
 	err := r.db.QueryRow(ctx, query, d.Nama).Scan(&d.ID, &d.CreatedAt)
 	if err != nil {
@@ -63,9 +63,9 @@ func (r *departemenRepository) Create(ctx context.Context, d *model.Departemen) 
 // GetByID mengambil satu departemen berdasarkan ID.
 func (r *departemenRepository) GetByID(ctx context.Context, id int) (*model.Departemen, error) {
 	query := `
-		SELECT id, nama, created_at
+		SELECT departemen_id, nama_departemen, created_at
 		FROM departemen
-		WHERE id = $1
+		WHERE departemen_id = $1
 	`
 	var d model.Departemen
 	err := r.db.QueryRow(ctx, query, id).Scan(&d.ID, &d.Nama, &d.CreatedAt)
@@ -81,9 +81,9 @@ func (r *departemenRepository) GetByID(ctx context.Context, id int) (*model.Depa
 // GetAll mengambil seluruh data departemen, diurutkan berdasarkan nama.
 func (r *departemenRepository) GetAll(ctx context.Context) ([]model.Departemen, error) {
 	query := `
-		SELECT id, nama, created_at
+		SELECT departemen_id, nama_departemen, created_at
 		FROM departemen
-		ORDER BY nama ASC
+		ORDER BY nama_departemen ASC
 	`
 	rows, err := r.db.Query(ctx, query)
 	if err != nil {
@@ -110,8 +110,8 @@ func (r *departemenRepository) GetAll(ctx context.Context) ([]model.Departemen, 
 func (r *departemenRepository) Update(ctx context.Context, d *model.Departemen) error {
 	query := `
 		UPDATE departemen
-		SET nama = $1
-		WHERE id = $2
+		SET nama_departemen = $1
+		WHERE departemen_id = $2
 		RETURNING created_at
 	`
 	err := r.db.QueryRow(ctx, query, d.Nama, d.ID).Scan(&d.CreatedAt)

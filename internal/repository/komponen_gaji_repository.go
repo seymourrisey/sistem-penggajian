@@ -58,9 +58,9 @@ func NewKomponenGajiRepository(db *pgxpool.Pool) KomponenGajiRepository {
 // generate PostgreSQL (SERIAL) ke struct k.
 func (r *komponenGajiRepository) Create(ctx context.Context, k *model.KomponenGaji) error {
 	query := `
-		INSERT INTO komponen_gaji (karyawan_id, jenis, nama, nominal, is_persen)
+		INSERT INTO komponen_gaji (karyawan_id, jenis, nama_komponen_gaji, nominal, is_persen)
 		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id`
+		RETURNING komponen_gaji_id`
 	err := r.db.QueryRow(ctx, query,
 		k.KaryawanID, k.Jenis, k.Nama, k.Nominal, k.IsPersen,
 	).Scan(&k.ID)
@@ -77,9 +77,9 @@ func (r *komponenGajiRepository) Create(ctx context.Context, k *model.KomponenGa
 // Mengembalikan ErrKomponenGajiNotFound jika tidak ada baris yang cocok.
 func (r *komponenGajiRepository) GetByID(ctx context.Context, id int) (*model.KomponenGaji, error) {
 	query := `
-		SELECT id, karyawan_id, jenis, nama, nominal, is_persen
+		SELECT komponen_gaji_id, karyawan_id, jenis, nama_komponen_gaji, nominal, is_persen
 		FROM komponen_gaji
-		WHERE id = $1`
+		WHERE komponen_gaji_id = $1`
 
 	var k model.KomponenGaji
 	err := r.db.QueryRow(ctx, query, id).Scan(
@@ -99,10 +99,10 @@ func (r *komponenGajiRepository) GetByID(ctx context.Context, id int) (*model.Ko
 // Mengembalikan slice kosong (bukan error) jika karyawan belum punya komponen.
 func (r *komponenGajiRepository) GetByKaryawanID(ctx context.Context, karyawanID int) ([]model.KomponenGaji, error) {
 	query := `
-		SELECT id, karyawan_id, jenis, nama, nominal, is_persen
+		SELECT komponen_gaji_id, karyawan_id, jenis, nama_komponen_gaji, nominal, is_persen
 		FROM komponen_gaji
 		WHERE karyawan_id = $1
-		ORDER BY id`
+		ORDER BY komponen_gaji_id`
 
 	rows, err := r.db.Query(ctx, query, karyawanID)
 	if err != nil {
@@ -133,10 +133,10 @@ func (r *komponenGajiRepository) Update(ctx context.Context, k *model.KomponenGa
 	query := `
 		UPDATE komponen_gaji
 		SET jenis = $1,
-		    nama = $2,
+		    nama_komponen_gaji = $2,
 		    nominal = $3,
 		    is_persen = $4
-		WHERE id = $5
+		WHERE komponen_gaji_id = $5
 		  AND karyawan_id = $6`
 
 	tag, err := r.db.Exec(

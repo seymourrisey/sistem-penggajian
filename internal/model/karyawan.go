@@ -22,9 +22,9 @@ const (
 // sengaja hanya boleh berubah lewat jalur SoftDelete (state transition),
 // bukan lewat Update data biasa (nip/nama/jabatan/gaji_pokok)
 type Karyawan struct {
-	ID           int             `json:"id" db:"id"`
+	ID           int             `json:"id" db:"karyawan_id"`
 	NIP          string          `json:"nip" db:"nip"`
-	Nama         string          `json:"nama" db:"nama"`
+	Nama         string          `json:"nama" db:"nama_karyawan"`
 	DepartemenID int             `json:"departemen_id" db:"departemen_id"`
 	Jabatan      string          `json:"jabatan" db:"jabatan"`
 	GajiPokok    decimal.Decimal `json:"gaji_pokok" db:"gaji_pokok"`

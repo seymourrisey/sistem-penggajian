@@ -55,9 +55,9 @@ func (r *karyawanRepository) Create(ctx context.Context, k *model.Karyawan) erro
 	}
 
 	query := `
-		INSERT INTO karyawan (nip, nama, departemen_id, jabatan, gaji_pokok, tanggal_masuk, status)
+		INSERT INTO karyawan (nip, nama_karyawan, departemen_id, jabatan, gaji_pokok, tanggal_masuk, status)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		RETURNING id, created_at, updated_at
+		RETURNING karyawan_id, created_at, updated_at
 	`
 	err := r.db.QueryRow(ctx, query,
 		k.NIP, k.Nama, k.DepartemenID, k.Jabatan, k.GajiPokok, k.TanggalMasuk, k.Status,
@@ -74,9 +74,9 @@ func (r *karyawanRepository) Create(ctx context.Context, k *model.Karyawan) erro
 // GetByID mengambil satu karyawan berdasarkan ID.
 func (r *karyawanRepository) GetByID(ctx context.Context, id int) (*model.Karyawan, error) {
 	query := `
-		SELECT id, nip, nama, departemen_id, jabatan, gaji_pokok, tanggal_masuk, status, created_at, updated_at
+		SELECT karyawan_id, nip, nama_karyawan, departemen_id, jabatan, gaji_pokok, tanggal_masuk, status, created_at, updated_at
 		FROM karyawan
-		WHERE id = $1
+		WHERE karyawan_id = $1
 	`
 	var k model.Karyawan
 	err := r.db.QueryRow(ctx, query, id).Scan(
@@ -99,15 +99,15 @@ func (r *karyawanRepository) GetAll(ctx context.Context, departemenID *int) ([]m
 	var err error
 
 	baseQuery := `
-		SELECT id, nip, nama, departemen_id, jabatan, gaji_pokok, tanggal_masuk, status, created_at, updated_at
+		SELECT karyawan_id, nip, nama_karyawan, departemen_id, jabatan, gaji_pokok, tanggal_masuk, status, created_at, updated_at
 		FROM karyawan
 	`
 
 	if departemenID != nil {
-		query := baseQuery + `WHERE departemen_id = $1 ORDER BY nama ASC`
+		query := baseQuery + `WHERE departemen_id = $1 ORDER BY nama_karyawan ASC`
 		rows, err = r.db.Query(ctx, query, *departemenID)
 	} else {
-		query := baseQuery + `ORDER BY nama ASC`
+		query := baseQuery + `ORDER BY nama_karyawan ASC`
 		rows, err = r.db.Query(ctx, query)
 	}
 	if err != nil {
@@ -138,13 +138,13 @@ func (r *karyawanRepository) Update(ctx context.Context, k *model.Karyawan) erro
 	query := `
 	    UPDATE karyawan
 	    SET nip = $1,
-	        nama = $2,
+	        nama_karyawan = $2,
 	        departemen_id = $3,
 	        jabatan = $4,
 	        gaji_pokok = $5,
 	        tanggal_masuk = $6,
 	        updated_at = NOW()
-	    WHERE id = $7
+	    WHERE karyawan_id = $7
 	    RETURNING status, created_at, updated_at
 		`
 	err := r.db.QueryRow(ctx, query,
@@ -168,7 +168,7 @@ func (r *karyawanRepository) SoftDelete(ctx context.Context, id int) error {
 	query := `
 		UPDATE karyawan
 		SET status = $1, updated_at = NOW()
-		WHERE id = $2
+		WHERE karyawan_id = $2
 	`
 	cmdTag, err := r.db.Exec(ctx, query, model.StatusKaryawanNonaktif, id)
 	if err != nil {

@@ -23,7 +23,7 @@ const (
 // (bukan hanya foreign key ke karyawan), supaya perubahan gaji_pokok bulan
 // berjalan tidak ikut mengubah riwayat bulan-bulan sebelumnya.
 type Payroll struct {
-	ID             int             `json:"id" db:"id"`
+	ID             int             `json:"id" db:"payroll_id"`
 	KaryawanID     int             `json:"karyawan_id" db:"karyawan_id"`
 	Periode        time.Time       `json:"periode" db:"periode"`
 	GajiPokok      decimal.Decimal `json:"gaji_pokok" db:"gaji_pokok"`

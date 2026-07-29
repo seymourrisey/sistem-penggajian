@@ -7,7 +7,7 @@ import "time"
 // padanya, sehingga menggunakan hard-delete (berbeda dengan Karyawan yang
 // soft-delete)
 type Departemen struct {
-	ID        int       `json:"id" db:"id"`
+	ID        int       `json:"id" db:"departemen_id"`
 	Nama      string    `json:"nama" db:"nama"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 }

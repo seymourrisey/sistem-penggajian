@@ -22,10 +22,10 @@ const (
 // (basis selalu gaji_pokok, bukan berjenjang); jika false, Nominal adalah
 // nilai rupiah flat. Lihat PayrollService.GeneratePayroll untuk logic kalkulasi.
 type KomponenGaji struct {
-	ID         int               `json:"id" db:"id"`
+	ID         int               `json:"id" db:"komponen_gaji_id"`
 	KaryawanID int               `json:"karyawan_id" db:"karyawan_id"`
 	Jenis      JenisKomponenGaji `json:"jenis" db:"jenis"`
-	Nama       string            `json:"nama" db:"nama"`
+	Nama       string            `json:"nama" db:"nama_komponen_gaji"`
 	Nominal    decimal.Decimal   `json:"nominal" db:"nominal"`
 	IsPersen   bool              `json:"is_persen" db:"is_persen"`
 }

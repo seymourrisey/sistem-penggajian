@@ -73,7 +73,7 @@ func (r *payrollRepository) Create(ctx context.Context, tx pgx.Tx, p *model.Payr
 	query := `
 		INSERT INTO payroll (karyawan_id, periode, gaji_pokok, total_tunjangan, total_potongan, gaji_bersih, status)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		RETURNING id, created_at`
+		RETURNING payroll_id, created_at`
 
 	err := tx.QueryRow(ctx, query,
 		p.KaryawanID, p.Periode, p.GajiPokok, p.TotalTunjangan, p.TotalPotongan, p.GajiBersih, p.Status,
@@ -94,11 +94,11 @@ func (r *payrollRepository) Create(ctx context.Context, tx pgx.Tx, p *model.Payr
 func (r *payrollRepository) GetRiwayatByKaryawanID(ctx context.Context, karyawanID int) ([]model.PayrollRiwayat, error) {
 	query := `
 		SELECT
-			p.id, p.karyawan_id, k.nip, k.nama,
+			p.payroll_id, p.karyawan_id, k.nip, k.nama_karyawan,
 			p.periode, p.gaji_pokok, p.total_tunjangan, p.total_potongan, p.gaji_bersih,
 			p.status, p.created_at
 		FROM payroll p
-		JOIN karyawan k ON k.id = p.karyawan_id
+		JOIN karyawan k ON k.karyawan_id = p.karyawan_id
 		WHERE p.karyawan_id = $1
 		ORDER BY p.periode DESC`
 
@@ -136,17 +136,17 @@ func (r *payrollRepository) GetRiwayatByKaryawanID(ctx context.Context, karyawan
 func (r *payrollRepository) GetLaporanAgregat(ctx context.Context, periode time.Time) ([]model.LaporanDepartemen, error) {
 	query := `
 		SELECT
-			d.id,
-			d.nama,
-			COUNT(p.id)            AS jumlah_karyawan,
+			d.departemen_id,
+			d.nama_departemen,
+			COUNT(p.payroll_id)            AS jumlah_karyawan,
 			SUM(p.gaji_bersih)     AS total_gaji_bersih,
 			AVG(p.gaji_bersih)     AS rata_rata_gaji_bersih
 		FROM payroll p
-		JOIN karyawan k    ON k.id = p.karyawan_id
-		JOIN departemen d  ON d.id = k.departemen_id
+		JOIN karyawan k    ON k.karyawan_id = p.karyawan_id
+		JOIN departemen d  ON d.departemen_id = k.departemen_id
 		WHERE p.periode = $1
-		GROUP BY d.id, d.nama
-		ORDER BY d.nama`
+		GROUP BY d.departemen_id, d.nama_departemen
+		ORDER BY d.nama_departemen`
 
 	rows, err := r.db.Query(ctx, query, periode)
 	if err != nil {
