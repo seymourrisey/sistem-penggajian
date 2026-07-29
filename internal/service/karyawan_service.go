@@ -65,6 +65,10 @@ func (s *karyawanService) Update(ctx context.Context, k *model.Karyawan) error {
 	if err := validateKaryawan(k); err != nil {
 		return err
 	}
+	// check status karyawan. status=nonaktif TOLAK
+	if k.Status != model.StatusKaryawanAktif {
+		return repository.ErrKaryawanTidakAktif
+	}
 	return s.repo.Update(ctx, k)
 }
 
