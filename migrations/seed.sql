@@ -20,7 +20,7 @@
 --     +/- random 0-300 hari) sebagai proxy masuk kerja.
 -- =========================================================
 
-INSERT INTO departemen (nama) VALUES
+INSERT INTO departemen (nama_departemen) VALUES
     ('Finance'),
     ('Human Resources'),
     ('Information Technology'),
@@ -28,7 +28,7 @@ INSERT INTO departemen (nama) VALUES
     ('Operations');
 
 
-INSERT INTO karyawan (nip, nama, departemen_id, jabatan, gaji_pokok, tanggal_masuk, status) VALUES
+INSERT INTO karyawan (nip, nama_karyawan, departemen_id, jabatan, gaji_pokok, tanggal_masuk, status) VALUES
     ('EMP20110001', 'Ratna Santoso', 4, 'Manager', 28250000.00, '2011-07-13', 'aktif'),
     ('EMP20190002', 'Zulfa Rahmawati', 5, 'Staff Senior', 24000000.00, '2019-03-20', 'aktif'),
     ('EMP20140003', 'Oki Pratama', 3, 'Manager', 16650000.00, '2014-06-02', 'aktif'),
@@ -83,7 +83,7 @@ INSERT INTO karyawan (nip, nama, departemen_id, jabatan, gaji_pokok, tanggal_mas
 
 -- Catatan: karyawan id=15 sengaja TIDAK memiliki komponen_gaji sama sekali
 -- (edge case untuk pengujian unit: generate payroll pada karyawan tanpa komponen)
-INSERT INTO komponen_gaji (karyawan_id, jenis, nama, nominal, is_persen) VALUES
+INSERT INTO komponen_gaji (karyawan_id, jenis, nama_komponen_gaji, nominal, is_persen) VALUES
     (1, 'tunjangan', 'Tunjangan Jabatan', 20.00, TRUE),
     (1, 'potongan', 'BPJS Kesehatan', 1.00, TRUE),
     (1, 'potongan', 'BPJS Ketenagakerjaan', 2.00, TRUE),
@@ -231,4 +231,3 @@ INSERT INTO komponen_gaji (karyawan_id, jenis, nama, nominal, is_persen) VALUES
     (50, 'tunjangan', 'Tunjangan Jabatan', 20.00, TRUE),
     (50, 'potongan', 'BPJS Kesehatan', 1.00, TRUE),
     (50, 'potongan', 'BPJS Ketenagakerjaan', 2.00, TRUE);
-

@@ -33,14 +33,14 @@ FOR EACH ROW EXECUTE FUNCTION trg_set_updated_at();
 -- VIEW: laporan gaji per departemen (menyederhanakan query JOIN+GROUP BY yang sudah ada)
 -- ============================================================
 CREATE OR REPLACE VIEW v_laporan_gaji_departemen AS
-SELECT d.nama AS departemen, p.periode,
-       COUNT(p.id) AS jumlah_karyawan,
+SELECT d.nama_departemen AS departemen, p.periode,
+       COUNT(p.karyawan_id) AS jumlah_karyawan,
        SUM(p.gaji_bersih) AS total_gaji_bersih,
        AVG(p.gaji_bersih) AS rata_rata_gaji
 FROM payroll p
-JOIN karyawan k ON p.karyawan_id = k.id
-JOIN departemen d ON k.departemen_id = d.id
-GROUP BY d.nama, p.periode;
+JOIN karyawan k ON p.karyawan_id = k.karyawan_id
+JOIN departemen d ON k.departemen_id = d.departemen_id
+GROUP BY d.nama_departemen, p.periode;
 
 -- ============================================================
 -- STORED PROCEDURE: contoh generate payroll snapshot via SQL murni (demonstrasi tambahan)
@@ -54,7 +54,7 @@ LANGUAGE plpgsql AS $$
 DECLARE
     v_gaji_pokok NUMERIC;
 BEGIN
-    SELECT gaji_pokok INTO v_gaji_pokok FROM karyawan WHERE id = p_karyawan_id;
+    SELECT gaji_pokok INTO v_gaji_pokok FROM karyawan WHERE karyawan_id = p_karyawan_id;
 
     IF v_gaji_pokok IS NULL THEN
         RAISE EXCEPTION 'karyawan_id % tidak ditemukan', p_karyawan_id;
