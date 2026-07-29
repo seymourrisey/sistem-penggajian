@@ -46,46 +46,46 @@
 
 ```sql
 CREATE TABLE departemen (
-    id          SERIAL PRIMARY KEY,
-    nama        VARCHAR(100) NOT NULL UNIQUE,
-    created_at  TIMESTAMP DEFAULT NOW()
+    departemen_id           SERIAL PRIMARY KEY,
+    nama_departemen         VARCHAR(100) NOT NULL UNIQUE,
+    created_at              TIMESTAMP DEFAULT NOW()
 );
 
 CREATE TABLE karyawan (
-    id              SERIAL PRIMARY KEY,
-    nip             VARCHAR(20) NOT NULL UNIQUE,
-    nama            VARCHAR(100) NOT NULL,
-    departemen_id   INT NOT NULL REFERENCES departemen(id),
-    jabatan         VARCHAR(50) NOT NULL,
-    gaji_pokok      NUMERIC(12,2) NOT NULL CHECK (gaji_pokok >= 0),
-    tanggal_masuk   DATE NOT NULL,
-    status          VARCHAR(20) DEFAULT 'aktif',
-    created_at      TIMESTAMP DEFAULT NOW(),
-    updated_at      TIMESTAMP DEFAULT NOW()
+    karyawan_id             SERIAL PRIMARY KEY,
+    nip                     VARCHAR(20) NOT NULL UNIQUE,
+    nama_karyawan           VARCHAR(100) NOT NULL,
+    departemen_id           INT NOT NULL REFERENCES departemen(departemen_id),
+    jabatan                 VARCHAR(50) NOT NULL,
+    gaji_pokok              NUMERIC(12,2) NOT NULL CHECK (gaji_pokok >= 0),
+    tanggal_masuk           DATE NOT NULL,
+    status                  VARCHAR(20) DEFAULT 'aktif',
+    created_at              TIMESTAMP DEFAULT NOW(),
+    updated_at              TIMESTAMP DEFAULT NOW()
 );
 
 CREATE TABLE komponen_gaji (
-    id          SERIAL PRIMARY KEY,
-    karyawan_id INT NOT NULL REFERENCES karyawan(id),
-    jenis       VARCHAR(20) NOT NULL CHECK (jenis IN ('tunjangan','potongan')),
-    nama        VARCHAR(50) NOT NULL,
-    nominal     NUMERIC(12,2) NOT NULL CHECK (nominal >= 0),
-    is_persen   BOOLEAN DEFAULT FALSE
+    komponen_gaji_id            SERIAL PRIMARY KEY,
+    karyawan_id                 INT NOT NULL REFERENCES karyawan(karyawan_id),
+    jenis                       VARCHAR(20) NOT NULL CHECK (jenis IN ('tunjangan','potongan')),
+    nama_komponen_gaji          VARCHAR(50) NOT NULL,
+    nominal                     NUMERIC(12,2) NOT NULL CHECK (nominal >= 0),
+    is_persen                   BOOLEAN DEFAULT FALSE,
 
     CONSTRAINT uq_komponen_gaji_karyawan_jenis_nama
-            UNIQUE (karyawan_id, jenis, nama)
+            UNIQUE (karyawan_id, jenis, nama_komponen_gaji)
 );
 
 CREATE TABLE payroll (
-    id              SERIAL PRIMARY KEY,
-    karyawan_id     INT NOT NULL REFERENCES karyawan(id),
-    periode         DATE NOT NULL,
-    gaji_pokok      NUMERIC(12,2) NOT NULL,
-    total_tunjangan NUMERIC(12,2) NOT NULL,
-    total_potongan  NUMERIC(12,2) NOT NULL,
-    gaji_bersih     NUMERIC(12,2) NOT NULL,
-    status          VARCHAR(20) DEFAULT 'draft',
-    created_at      TIMESTAMP DEFAULT NOW(),
+    payroll_id              SERIAL PRIMARY KEY,
+    karyawan_id             INT NOT NULL REFERENCES karyawan(karyawan_id),
+    periode                 DATE NOT NULL,
+    gaji_pokok              NUMERIC(12,2) NOT NULL,
+    total_tunjangan         NUMERIC(12,2) NOT NULL,
+    total_potongan          NUMERIC(12,2) NOT NULL,
+    gaji_bersih             NUMERIC(12,2) NOT NULL,
+    status                  VARCHAR(20) DEFAULT 'draft',
+    created_at              TIMESTAMP DEFAULT NOW(),
     UNIQUE(karyawan_id, periode)
 );
 
@@ -136,20 +136,22 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_karyawan_updated_at ON karyawan;
+
 CREATE TRIGGER trg_karyawan_updated_at
 BEFORE UPDATE ON karyawan
 FOR EACH ROW EXECUTE FUNCTION trg_set_updated_at();
 
 -- VIEW: laporan gaji per departemen (menyederhanakan query JOIN+GROUP BY yang sudah ada)
-CREATE VIEW v_laporan_gaji_departemen AS
-SELECT d.nama AS departemen, p.periode,
-       COUNT(p.id) AS jumlah_karyawan,
+CREATE OR REPLACE VIEW v_laporan_gaji_departemen AS
+SELECT d.nama_departemen AS departemen, p.periode,
+       COUNT(p.karyawan_id) AS jumlah_karyawan,
        SUM(p.gaji_bersih) AS total_gaji_bersih,
        AVG(p.gaji_bersih) AS rata_rata_gaji
 FROM payroll p
-JOIN karyawan k ON p.karyawan_id = k.id
-JOIN departemen d ON k.departemen_id = d.id
-GROUP BY d.nama, p.periode;
+JOIN karyawan k ON p.karyawan_id = k.karyawan_id
+JOIN departemen d ON k.departemen_id = d.departemen_id
+GROUP BY d.nama_departemen, p.periode;
 
 -- STORED PROCEDURE: contoh generate payroll snapshot via SQL murni (demonstrasi tambahan)
 CREATE OR REPLACE PROCEDURE sp_generate_payroll_snapshot(
@@ -159,7 +161,12 @@ LANGUAGE plpgsql AS $$
 DECLARE
     v_gaji_pokok NUMERIC;
 BEGIN
-    SELECT gaji_pokok INTO v_gaji_pokok FROM karyawan WHERE id = p_karyawan_id;
+    SELECT gaji_pokok INTO v_gaji_pokok FROM karyawan WHERE karyawan_id = p_karyawan_id;
+
+    IF v_gaji_pokok IS NULL THEN
+        RAISE EXCEPTION 'karyawan_id % tidak ditemukan', p_karyawan_id;
+    END IF;
+
     INSERT INTO payroll (karyawan_id, periode, gaji_pokok, total_tunjangan, total_potongan, gaji_bersih)
     VALUES (p_karyawan_id, p_periode, v_gaji_pokok, 0, 0, v_gaji_pokok);
 END;
