@@ -131,7 +131,7 @@ func (r *departemenRepository) Update(ctx context.Context, d *model.Departemen) 
 // tidak memiliki kolom status, berbeda dengan karyawan yang pakai soft-delete).
 func (r *departemenRepository) Delete(ctx context.Context, id int) error {
 	query := `
-		DELETE FROM departemen WHERE id = $1
+		DELETE FROM departemen WHERE departemen_id = $1
 	`
 	cmdTag, err := r.db.Exec(ctx, query, id)
 	if err != nil {
